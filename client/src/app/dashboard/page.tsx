@@ -1,24 +1,22 @@
-"use client";
-
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from "@/context/AuthContext";
+import { getMediaFiles } from "@/lib/server-api";
 import { Upload, Image as ImageIcon, Cpu, Activity } from "lucide-react";
 
-export default function DashboardPage() {
-  const { user } = useAuth();
+export default async function DashboardPage() {
+  const mediaFiles = await getMediaFiles();
 
   const stats = [
     {
       title: "Total Uploads",
-      value: "0",
+      value: mediaFiles.length.toString(),
       description: "Videos and Photos",
       icon: Upload,
       color: "text-blue-500",
     },
     {
       title: "Media Files",
-      value: "0",
+      value: mediaFiles.length.toString(),
       description: "In gallery",
       icon: ImageIcon,
       color: "text-purple-500",
@@ -45,7 +43,7 @@ export default function DashboardPage() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
-          <p className="text-slate-400">Welcome back, {user?.displayName || user?.email}</p>
+          <p className="text-slate-400">Welcome back to your media dashboard</p>
         </div>
 
         {/* Stats Grid */}

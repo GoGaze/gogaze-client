@@ -42,7 +42,6 @@ export default function UploadPage() {
 
     setUploading(true);
 
-    // Simulate upload progress
     for (const file of files) {
       if (file.status === "completed") continue;
 
@@ -50,17 +49,31 @@ export default function UploadPage() {
         prev.map((f) => (f.id === file.id ? { ...f, status: "uploading" as const } : f))
       );
 
-      // Simulate progress
-      for (let progress = 0; progress <= 100; progress += 10) {
-        await new Promise((resolve) => setTimeout(resolve, 200));
+      try {
+        const formData = new FormData();
+        formData.append('title', file.file.name);
+        formData.append('file', file.file);
+
+        const response = await fetch('/api/media', {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (response.ok) {
+          setFiles((prev) =>
+            prev.map((f) => (f.id === file.id ? { ...f, status: "completed" as const, progress: 100 } : f))
+          );
+        } else {
+          setFiles((prev) =>
+            prev.map((f) => (f.id === file.id ? { ...f, status: "error" as const } : f))
+          );
+        }
+      } catch (error) {
+        console.error('Upload error:', error);
         setFiles((prev) =>
-          prev.map((f) => (f.id === file.id ? { ...f, progress } : f))
+          prev.map((f) => (f.id === file.id ? { ...f, status: "error" as const } : f))
         );
       }
-
-      setFiles((prev) =>
-        prev.map((f) => (f.id === file.id ? { ...f, status: "completed" as const } : f))
-      );
     }
 
     setUploading(false);
