@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # GoGaze Client Application - Staging
+  gogaze-client:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${STAGING_API_URL:-http://staging-api:8000/api}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    networks:
+      - gogaze-staging
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gogaze-staging.rule=Host(`staging.gogaze.local`)"
+      - "traefik.http.services.gogaze-staging.loadbalancer.server.port=3000"
+
+  # Redis for staging
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_staging_data:/data
+    networks:
+      - gogaze-staging
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx for staging
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.staging.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - gogaze-client
+    networks:
+      - gogaze-staging
+    restart: unless-stopped
+
+  # Monitoring for staging
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.staging.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - gogaze-staging
+    restart: unless-stopped
+
+  # Grafana for staging
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_staging_data:/var/lib/grafana
+    networks:
+      - gogaze-staging
+    restart: unless-stopped
+
+volumes:
+  redis_staging_data:
+  grafana_staging_data:
+
+networks:
+  gogaze-staging:
+    driver: bridge
