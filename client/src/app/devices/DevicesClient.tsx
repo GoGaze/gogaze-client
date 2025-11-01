@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useWebSocket } from "@/lib/hooks/useWebSocket";
-import { Cpu, Wifi, WifiOff, Play, Square, Settings, Trash2 } from "lucide-react";
+import { Cpu, Wifi, WifiOff, Play, Settings, Trash2 } from "lucide-react";
 
 interface Device {
   id: string;
@@ -22,7 +22,7 @@ export function DevicesClient() {
   const [newDeviceName, setNewDeviceName] = useState("");
   const [selectedDevice, setSelectedDevice] = useState<string | null>(null);
   
-  const { connected, connecting, error, connect, disconnect, lastMessage } = useWebSocket();
+  const { connected, connecting, connect, disconnect, lastMessage } = useWebSocket();
 
   // Mock devices for demonstration
   useEffect(() => {

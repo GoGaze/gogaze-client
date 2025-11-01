@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { getFileType, getMediaFileUrl } from "@/lib/api";
 import {
@@ -12,9 +12,9 @@ import {
   Grid3x3,
   List,
   Play,
-  Download,
   Trash2,
   Eye,
+  Loader2,
 } from "lucide-react";
 
 interface MediaFile {
@@ -26,13 +26,35 @@ interface MediaFile {
 }
 
 interface GalleryClientProps {
-  mediaFiles: MediaFile[];
+  mediaFiles: MediaFile[]; // Initial SSR data
 }
 
-export function GalleryClient({ mediaFiles }: GalleryClientProps) {
+export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("all");
+  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>(initialMediaFiles);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch media files client-side so it appears in browser network tab
+  useEffect(() => {
+    const fetchMediaFiles = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch('/api/media');
+        if (response.ok) {
+          const data = await response.json();
+          setMediaFiles(data);
+        }
+      } catch (error) {
+        console.error('Error fetching media files:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMediaFiles();
+  }, []);
 
   const filteredMedia = mediaFiles.filter((item) => {
     const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -52,8 +74,12 @@ export function GalleryClient({ mediaFiles }: GalleryClientProps) {
         });
         
         if (response.ok) {
-          // Refresh the page to show updated data
-          window.location.reload();
+          // Refresh media files list
+          const refreshResponse = await fetch('/api/media');
+          if (refreshResponse.ok) {
+            const data = await refreshResponse.json();
+            setMediaFiles(data);
+          }
         } else {
           alert("Failed to delete file");
         }
@@ -158,7 +184,16 @@ export function GalleryClient({ mediaFiles }: GalleryClientProps) {
       </Tabs>
 
       {/* Media Grid/List */}
-      {filteredMedia.length === 0 ? (
+      {loading ? (
+        <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm">
+          <CardContent className="py-16">
+            <div className="text-center text-slate-400">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+              <p className="text-lg mb-2">Loading media files...</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : filteredMedia.length === 0 ? (
         <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm">
           <CardContent className="py-16">
             <div className="text-center text-slate-400">

@@ -1,6 +1,7 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMediaFiles } from "@/lib/server-api";
+import Link from "next/link";
 import { Upload, Image as ImageIcon, Cpu, Activity } from "lucide-react";
 
 export default async function DashboardPage() {
@@ -69,41 +70,47 @@ export default async function DashboardPage() {
 
         {/* Quick Actions */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:bg-slate-800/70 transition-all cursor-pointer">
-            <CardHeader>
-              <div className="h-12 w-12 rounded-lg bg-purple-600/20 flex items-center justify-center mb-4">
-                <Upload className="h-6 w-6 text-purple-400" />
-              </div>
-              <CardTitle className="text-white">Upload Media</CardTitle>
-              <CardDescription className="text-slate-400">
-                Upload videos and photos to your gallery
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <Link href="/upload">
+            <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:bg-slate-800/70 transition-all cursor-pointer">
+              <CardHeader>
+                <div className="h-12 w-12 rounded-lg bg-purple-600/20 flex items-center justify-center mb-4">
+                  <Upload className="h-6 w-6 text-purple-400" />
+                </div>
+                <CardTitle className="text-white">Upload Media</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Upload videos and photos to your gallery
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
 
-          <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:bg-slate-800/70 transition-all cursor-pointer">
-            <CardHeader>
-              <div className="h-12 w-12 rounded-lg bg-blue-600/20 flex items-center justify-center mb-4">
-                <ImageIcon className="h-6 w-6 text-blue-400" />
-              </div>
-              <CardTitle className="text-white">View Gallery</CardTitle>
-              <CardDescription className="text-slate-400">
-                Browse all your uploaded media files
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <Link href="/gallery">
+            <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:bg-slate-800/70 transition-all cursor-pointer">
+              <CardHeader>
+                <div className="h-12 w-12 rounded-lg bg-blue-600/20 flex items-center justify-center mb-4">
+                  <ImageIcon className="h-6 w-6 text-blue-400" />
+                </div>
+                <CardTitle className="text-white">View Gallery</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Browse all your uploaded media files
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
 
-          <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:bg-slate-800/70 transition-all cursor-pointer">
-            <CardHeader>
-              <div className="h-12 w-12 rounded-lg bg-green-600/20 flex items-center justify-center mb-4">
-                <Cpu className="h-6 w-6 text-green-400" />
-              </div>
-              <CardTitle className="text-white">Manage Devices</CardTitle>
-              <CardDescription className="text-slate-400">
-                View and control Raspberry Pi devices
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <Link href="/devices">
+            <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:bg-slate-800/70 transition-all cursor-pointer">
+              <CardHeader>
+                <div className="h-12 w-12 rounded-lg bg-green-600/20 flex items-center justify-center mb-4">
+                  <Cpu className="h-6 w-6 text-green-400" />
+                </div>
+                <CardTitle className="text-white">Manage Devices</CardTitle>
+                <CardDescription className="text-slate-400">
+                  View and control Raspberry Pi devices
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          </Link>
         </div>
 
         {/* Recent Activity */}

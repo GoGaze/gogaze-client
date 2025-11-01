@@ -88,7 +88,6 @@ export default function UploadPage() {
   };
 
   const isVideo = (file: File) => file.type.startsWith("video/");
-  const isImage = (file: File) => file.type.startsWith("image/");
 
   return (
     <DashboardLayout>

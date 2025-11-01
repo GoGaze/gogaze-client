@@ -12,7 +12,6 @@ import {
   Image as ImageIcon,
   Cpu,
   Settings,
-  LogOut,
 } from "lucide-react";
 
 interface DashboardLayoutProps {
@@ -27,22 +26,22 @@ const menuItems = [
   },
   {
     title: "Upload",
-    href: "/dashboard/upload",
+    href: "/upload",
     icon: Upload,
   },
   {
     title: "Gallery",
-    href: "/dashboard/gallery",
+    href: "/gallery",
     icon: ImageIcon,
   },
   {
     title: "Devices",
-    href: "/dashboard/devices",
+    href: "/devices",
     icon: Cpu,
   },
   {
     title: "Settings",
-    href: "/dashboard/settings",
+    href: "/settings",
     icon: Settings,
   },
 ];

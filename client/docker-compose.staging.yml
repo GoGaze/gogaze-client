@@ -10,7 +10,8 @@ services:
       - "3001:3000"
     environment:
       - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=${STAGING_API_URL:-http://staging-api:8000/api}
+      - API_BASE_URL=${STAGING_API_URL:-http://staging-api:8000/api}
+      - NEXT_PUBLIC_API_URL=${STAGING_PUBLIC_API_URL:-http://staging-api:8000/api}
       - REDIS_URL=redis://redis:6379
     depends_on:
       - redis

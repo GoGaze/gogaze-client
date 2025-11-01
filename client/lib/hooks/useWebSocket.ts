@@ -1,11 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { WebSocketService } from '../api';
-
-export interface WebSocketMessage {
-  type: string;
-  url?: string;
-  [key: string]: any;
-}
+import { WebSocketService, WebSocketMessage } from '../api';
 
 export interface UseWebSocketReturn {
   connected: boolean;
@@ -13,7 +7,7 @@ export interface UseWebSocketReturn {
   error: string | null;
   connect: (deviceId: string) => Promise<void>;
   disconnect: () => void;
-  sendMessage: (message: any) => void;
+  sendMessage: (message: WebSocketMessage) => void;
   lastMessage: WebSocketMessage | null;
 }
 
@@ -70,11 +64,11 @@ export function useWebSocket(): UseWebSocketReturn {
     setError(null);
   }, []);
 
-  const sendMessage = useCallback((message: any) => {
+  const sendMessage = useCallback((message: WebSocketMessage) => {
     if (webSocketServiceRef.current && webSocketServiceRef.current.isConnected()) {
       // Note: The current WebSocketService doesn't have a send method
       // This would need to be implemented if bidirectional communication is needed
-      console.warn('Send message not implemented in WebSocketService');
+      console.warn('Send message not implemented in WebSocketService', message);
     } else {
       console.warn('WebSocket not connected');
     }

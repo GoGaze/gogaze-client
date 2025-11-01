@@ -17,11 +17,17 @@ export interface PlayResponse {
   status: string;
 }
 
-class ApiError extends Error {
+export interface WebSocketMessage {
+  type: string;
+  url?: string;
+  [key: string]: unknown;
+}
+
+export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
-    public response?: any
+    public response?: unknown
   ) {
     super(message);
     this.name = 'ApiError';
@@ -143,7 +149,7 @@ export class MediaApiService {
 export class WebSocketService {
   private socket: WebSocket | null = null;
   private deviceId: string;
-  private onMessageCallback?: (message: any) => void;
+  private onMessageCallback?: (message: WebSocketMessage) => void;
   private onConnectionChangeCallback?: (connected: boolean) => void;
 
   constructor(deviceId: string) {
@@ -155,7 +161,7 @@ export class WebSocketService {
    */
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const wsUrl = `ws://localhost:8000/ws/display/${this.deviceId}/`;
+      const wsUrl = `ws://13.233.206.39/ws/display/${this.deviceId}/`;
       
       try {
         this.socket = new WebSocket(wsUrl);
@@ -203,7 +209,7 @@ export class WebSocketService {
   /**
    * Set message handler
    */
-  onMessage(callback: (message: any) => void): void {
+  onMessage(callback: (message: WebSocketMessage) => void): void {
     this.onMessageCallback = callback;
   }
 

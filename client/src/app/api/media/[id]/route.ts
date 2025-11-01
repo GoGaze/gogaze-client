@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:8000/api';
+const API_BASE_URL =
+  process.env.API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8000/api';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const response = await fetch(`${API_BASE_URL}/media/${params.id}/`, {
+    const { id } = await params;
+    const response = await fetch(`${API_BASE_URL}/media/${id}/`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -31,12 +35,13 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     
-    const response = await fetch(`${API_BASE_URL}/media/${params.id}/`, {
+    const response = await fetch(`${API_BASE_URL}/media/${id}/`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -62,10 +67,11 @@ export async function PATCH(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const response = await fetch(`${API_BASE_URL}/media/${params.id}/`, {
+    const { id } = await params;
+    const response = await fetch(`${API_BASE_URL}/media/${id}/`, {
       method: 'DELETE',
     });
 
