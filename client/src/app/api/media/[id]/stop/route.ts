@@ -1,0 +1,46 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+const API_BASE_URL =
+  process.env.API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_URL ||
+  'http://localhost:8000/api';
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    
+    if (!body.device_id) {
+      return NextResponse.json(
+        { error: 'device_id is required' },
+        { status: 400 }
+      );
+    }
+
+    const response = await fetch(`${API_BASE_URL}/media/${id}/stop/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Error stopping media on device:', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to stop media on device' },
+      { status: 500 }
+    );
+  }
+}
+

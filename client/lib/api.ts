@@ -17,6 +17,14 @@ export interface PlayResponse {
   status: string;
 }
 
+export interface StopCommand {
+  device_id: string;
+}
+
+export interface StopResponse {
+  status: string;
+}
+
 export interface WebSocketMessage {
   type: string;
   url?: string;
@@ -142,6 +150,21 @@ export class MediaApiService {
     });
 
     return handleResponse<PlayResponse>(response);
+  }
+
+  /**
+   * Send stop command to a device
+   */
+  async stopMediaOnDevice(id: number, deviceId: string): Promise<StopResponse> {
+    const response = await fetch(`${this.baseUrl}/media/${id}/stop/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ device_id: deviceId }),
+    });
+
+    return handleResponse<StopResponse>(response);
   }
 }
 

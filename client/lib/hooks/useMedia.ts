@@ -9,6 +9,7 @@ export interface UseMediaReturn {
   updateFile: (id: number, updates: Partial<Pick<MediaFile, 'title'>>) => Promise<MediaFile>;
   deleteFile: (id: number) => Promise<void>;
   playOnDevice: (id: number, deviceId: string) => Promise<void>;
+  stopOnDevice: (id: number, deviceId: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -93,6 +94,19 @@ export function useMedia(): UseMediaReturn {
     }
   }, []);
 
+  const stopOnDevice = useCallback(async (id: number, deviceId: string): Promise<void> => {
+    try {
+      setError(null);
+      await mediaApi.stopMediaOnDevice(id, deviceId);
+    } catch (err) {
+      const errorMessage = err instanceof ApiError 
+        ? err.message 
+        : 'Failed to stop media on device';
+      setError(errorMessage);
+      throw err;
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     await fetchMediaFiles();
   }, [fetchMediaFiles]);
@@ -109,6 +123,7 @@ export function useMedia(): UseMediaReturn {
     updateFile,
     deleteFile,
     playOnDevice,
+    stopOnDevice,
     refresh,
   };
 }

@@ -12,6 +12,7 @@ import {
   Grid3x3,
   List,
   Play,
+  Square,
   Trash2,
   Eye,
   Loader2,
@@ -110,6 +111,30 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
       } catch (error) {
         console.error("Failed to play on device:", error);
         alert("Failed to send play command to device");
+      }
+    }
+  };
+
+  const handleStop = async (id: number) => {
+    const deviceId = prompt("Enter device ID:");
+    if (deviceId) {
+      try {
+        const response = await fetch(`/api/media/${id}/stop`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ device_id: deviceId }),
+        });
+        
+        if (response.ok) {
+          alert("Stop command sent to device!");
+        } else {
+          alert("Failed to send stop command to device");
+        }
+      } catch (error) {
+        console.error("Failed to stop on device:", error);
+        alert("Failed to send stop command to device");
       }
     }
   };
@@ -264,10 +289,20 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
                     <Button
                       size="sm"
                       variant="outline"
-                      className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                      className="border-slate-600 text-green-400 hover:bg-green-900/20"
                       onClick={() => handlePlay(item.id)}
+                      title="Play on device"
                     >
                       <Play className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-slate-600 text-yellow-400 hover:bg-yellow-900/20"
+                      onClick={() => handleStop(item.id)}
+                      title="Stop on device"
+                    >
+                      <Square className="h-3 w-3" />
                     </Button>
                     <Button
                       size="sm"
@@ -339,10 +374,20 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                        className="border-slate-600 text-green-400 hover:bg-green-900/20"
                         onClick={() => handlePlay(item.id)}
+                        title="Play on device"
                       >
                         <Play className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="border-slate-600 text-yellow-400 hover:bg-yellow-900/20"
+                        onClick={() => handleStop(item.id)}
+                        title="Stop on device"
+                      >
+                        <Square className="h-4 w-4" />
                       </Button>
                       <Button
                         size="sm"
