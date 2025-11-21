@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { AuthGuard } from "@/components/AuthGuard";
 import {
   LayoutDashboard,
   Upload,
@@ -51,7 +52,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user } = useAuth();
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <AuthGuard>
+      <div className="flex h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Sidebar */}
       <aside className="w-64 border-r border-slate-700 bg-slate-900/50 backdrop-blur-sm flex flex-col">
         {/* Logo/Brand */}
@@ -123,5 +125,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="h-full">{children}</div>
       </main>
     </div>
+    </AuthGuard>
   );
 }
