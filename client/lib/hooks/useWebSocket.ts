@@ -7,6 +7,7 @@ export interface UseWebSocketReturn {
   error: string | null;
   connect: (deviceId: string) => Promise<void>;
   disconnect: () => void;
+  send: (message: WebSocketMessage) => void;
   lastMessage: WebSocketMessage | null;
 }
 
@@ -63,6 +64,12 @@ export function useWebSocket(): UseWebSocketReturn {
     setError(null);
   }, []);
 
+  const send = useCallback((message: WebSocketMessage) => {
+    if (webSocketServiceRef.current) {
+      webSocketServiceRef.current.send(message);
+    }
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -76,6 +83,7 @@ export function useWebSocket(): UseWebSocketReturn {
     error,
     connect,
     disconnect,
+    send,
     lastMessage,
   };
 }

@@ -9,6 +9,32 @@ export interface MediaFile {
   file: string;
   processed_file?: string;
   uploaded_at: string;
+  // Playback stats
+  total_play_count?: number;
+  total_play_seconds?: number;
+  total_play_duration_display?: string;
+  is_currently_playing?: boolean;
+}
+
+export interface PlaybackSession {
+  id: number;
+  media_file: number;
+  device_id: string;
+  started_at: string;
+  stopped_at: string | null;
+  stop_reason: string | null;
+  duration_seconds: number;
+  duration_display: string;
+}
+
+export interface PlaybackStats {
+  media_id: number;
+  title: string;
+  total_play_count: number;
+  total_play_seconds: number;
+  total_play_duration_display: string;
+  is_currently_playing: boolean;
+  sessions: PlaybackSession[];
 }
 
 export interface PlayCommand {
@@ -17,6 +43,8 @@ export interface PlayCommand {
 
 export interface PlayResponse {
   status: string;
+  session_id?: number;
+  started_at?: string;
 }
 
 export interface StopCommand {
@@ -25,6 +53,7 @@ export interface StopCommand {
 
 export interface StopResponse {
   status: string;
+  sessions_stopped?: number;
 }
 
 export interface WebSocketMessage {
@@ -157,16 +186,32 @@ export class MediaApiService {
   /**
    * Send stop command to a device
    */
-  async stopMediaOnDevice(id: number, deviceId: string): Promise<StopResponse> {
+  async stopMediaOnDevice(id: number, deviceId: string, reason: string = 'manual'): Promise<StopResponse> {
     const response = await fetch(`${this.baseUrl}/media/${id}/stop/`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ device_id: deviceId }),
+      body: JSON.stringify({ device_id: deviceId, reason }),
     });
 
     return handleResponse<StopResponse>(response);
+  }
+
+  /**
+   * Get playback stats for a media file
+   */
+  async getPlaybackStats(id: number): Promise<PlaybackStats> {
+    const response = await fetch(`${this.baseUrl}/media/${id}/playback_stats/`);
+    return handleResponse<PlaybackStats>(response);
+  }
+
+  /**
+   * Get playback sessions for a media file
+   */
+  async getPlaybackSessions(id: number): Promise<PlaybackSession[]> {
+    const response = await fetch(`${this.baseUrl}/media/${id}/playback_sessions/`);
+    return handleResponse<PlaybackSession[]>(response);
   }
 }
 
@@ -219,6 +264,17 @@ export class WebSocketService {
         reject(error);
       }
     });
+  }
+
+  /**
+   * Send a message to the device via WebSocket
+   */
+  send(message: WebSocketMessage): void {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(JSON.stringify(message));
+    } else {
+      console.warn('WebSocket not connected, cannot send message');
+    }
   }
 
   /**
