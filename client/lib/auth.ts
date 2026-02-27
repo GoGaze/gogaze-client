@@ -29,13 +29,9 @@ export const signInWithEmail = async (
   email: string,
   password: string
 ): Promise<UserCredential> => {
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    await storeToken(userCredential);
-    return userCredential;
-  } catch (error) {
-    throw error;
-  }
+  const userCredential = await signInWithEmailAndPassword(auth, email, password);
+  await storeToken(userCredential);
+  return userCredential;
 };
 
 // Email/Password Sign Up
@@ -43,32 +39,20 @@ export const signUpWithEmail = async (
   email: string,
   password: string
 ): Promise<UserCredential> => {
-  try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    await storeToken(userCredential);
-    return userCredential;
-  } catch (error) {
-    throw error;
-  }
+  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+  await storeToken(userCredential);
+  return userCredential;
 };
 
 // Google Sign In
 export const signInWithGoogle = async (): Promise<UserCredential> => {
-  try {
-    const userCredential = await signInWithPopup(auth, googleProvider);
-    await storeToken(userCredential);
-    return userCredential;
-  } catch (error) {
-    throw error;
-  }
+  const userCredential = await signInWithPopup(auth, googleProvider);
+  await storeToken(userCredential);
+  return userCredential;
 };
 
 // Sign Out
 export const signOut = async (): Promise<void> => {
-  try {
-    await firebaseSignOut(auth);
-    removeAuthToken();
-  } catch (error) {
-    throw error;
-  }
+  await firebaseSignOut(auth);
+  removeAuthToken();
 };

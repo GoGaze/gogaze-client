@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Upload, X, FileVideo, FileImage, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { formatFileSize } from "@/lib/api";
 
 interface UploadFile {
   id: string;
@@ -15,26 +16,69 @@ interface UploadFile {
   preview?: string;
   progress: number;
   status: "pending" | "uploading" | "completed" | "error";
+  errorMessage?: string;
 }
+
+const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB in bytes
 
 export default function UploadPage() {
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || []);
-    const newFiles: UploadFile[] = selectedFiles.map((file) => ({
-      id: Math.random().toString(36).substr(2, 9),
-      file,
-      preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
-      progress: 0,
-      status: "pending",
-    }));
-    setFiles([...files, ...newFiles]);
+    processFiles(selectedFiles);
+    // Reset input to allow selecting the same file again
+    e.target.value = '';
   };
 
   const removeFile = (id: string) => {
-    setFiles(files.filter((f) => f.id !== id));
+    setFiles((prev) => {
+      const fileToRemove = prev.find((f) => f.id === id);
+      if (fileToRemove?.preview) {
+        URL.revokeObjectURL(fileToRemove.preview);
+      }
+      return prev.filter((f) => f.id !== id);
+    });
+  };
+
+  const processFiles = (fileList: File[]) => {
+    const newFiles: UploadFile[] = fileList.map((file) => {
+      const isTooLarge = file.size > MAX_FILE_SIZE;
+      return {
+        id: Math.random().toString(36).substr(2, 9),
+        file,
+        preview: file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined,
+        progress: 0,
+        status: isTooLarge ? ("error" as const) : ("pending" as const),
+        errorMessage: isTooLarge 
+          ? `File size (${formatFileSize(file.size)}) exceeds maximum allowed size of ${formatFileSize(MAX_FILE_SIZE)}`
+          : undefined,
+      };
+    });
+    setFiles((prev) => [...prev, ...newFiles]);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    processFiles(droppedFiles);
   };
 
   const handleUpload = async () => {
@@ -43,48 +87,111 @@ export default function UploadPage() {
     setUploading(true);
 
     for (const file of files) {
-      if (file.status === "completed") continue;
+      if (file.status === "completed" || file.status === "error") continue;
 
       setFiles((prev) =>
-        prev.map((f) => (f.id === file.id ? { ...f, status: "uploading" as const } : f))
+        prev.map((f) => (f.id === file.id ? { ...f, status: "uploading" as const, progress: 0 } : f))
       );
 
       try {
-        const formData = new FormData();
-        formData.append('title', file.file.name);
-        formData.append('file', file.file);
+        // Use XMLHttpRequest for real upload progress tracking
+        const result = await new Promise<{ ok: boolean; status: number; data: Record<string, string> }>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          const formData = new FormData();
+          formData.append('title', file.file.name);
+          formData.append('file', file.file);
 
-        const response = await fetch('/api/media', {
-          method: 'POST',
-          body: formData,
+          // Track upload progress
+          xhr.upload.addEventListener('progress', (event) => {
+            if (event.lengthComputable) {
+              const percent = Math.round((event.loaded / event.total) * 100);
+              setFiles((prev) =>
+                prev.map((f) => (f.id === file.id ? { ...f, progress: percent } : f))
+              );
+            }
+          });
+
+          xhr.addEventListener('load', () => {
+            let data = {};
+            try { data = JSON.parse(xhr.responseText); } catch { /* ignore */ }
+            resolve({ ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, data: data as Record<string, string> });
+          });
+
+          xhr.addEventListener('error', () => reject(new Error('Network error')));
+          xhr.addEventListener('timeout', () => reject(new Error('Upload timeout')));
+          xhr.addEventListener('abort', () => reject(new Error('Upload aborted')));
+
+          xhr.timeout = 600000; // 10 minutes
+          xhr.open('POST', '/api/media');
+          xhr.send(formData);
         });
 
-        if (response.ok) {
+        if (result.ok) {
           setFiles((prev) =>
             prev.map((f) => (f.id === file.id ? { ...f, status: "completed" as const, progress: 100 } : f))
           );
         } else {
+          let errorMessage = result.data?.error || result.data?.detail || 'Upload failed.';
+          
+          // Provide specific error messages based on status code
+          if (result.status === 413) {
+            errorMessage = 'File is too large. Maximum size is 500MB.';
+          } else if (result.status === 502) {
+            if (result.data?.error?.includes('Backend server')) {
+              errorMessage = result.data.error;
+            } else {
+              errorMessage = 'Backend server is not responding. Please check if the API server is running.';
+            }
+          } else if (result.status === 504) {
+            errorMessage = 'Upload timeout. The file may be too large or the connection is slow.';
+          } else if (result.status >= 500) {
+            errorMessage = result.data?.error || 'Server error. Please try again later.';
+          }
+          
+          console.error('Upload failed:', {
+            status: result.status,
+            error: errorMessage,
+            file: file.file.name,
+            size: file.file.size
+          });
+          
           setFiles((prev) =>
-            prev.map((f) => (f.id === file.id ? { ...f, status: "error" as const } : f))
+            prev.map((f) => (f.id === file.id ? { 
+              ...f, 
+              status: "error" as const,
+              errorMessage
+            } : f))
           );
         }
       } catch (error) {
         console.error('Upload error:', error);
+        let errorMessage = 'Upload failed. Please try again.';
+        
+        if (error instanceof Error) {
+          if (error.message.includes('413') || error.message.includes('too large')) {
+            errorMessage = 'File is too large. Maximum size is 500MB.';
+          } else if (error.message.includes('502') || error.message.includes('Bad Gateway')) {
+            errorMessage = 'Cannot connect to backend server. Please check if the API server is running.';
+          } else if (error.message.includes('504') || error.message.includes('timeout')) {
+            errorMessage = 'Upload timeout. The file may be too large or the connection is slow.';
+          } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.message.includes('Network error')) {
+            errorMessage = 'Network error. Please check your connection and try again.';
+          } else {
+            errorMessage = error.message;
+          }
+        }
+        
         setFiles((prev) =>
-          prev.map((f) => (f.id === file.id ? { ...f, status: "error" as const } : f))
+          prev.map((f) => (f.id === file.id ? { 
+            ...f, 
+            status: "error" as const,
+            errorMessage 
+          } : f))
         );
       }
     }
 
     setUploading(false);
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 Bytes";
-    const k = 1024;
-    const sizes = ["Bytes", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + " " + sizes[i];
   };
 
   const isVideo = (file: File) => file.type.startsWith("video/");
@@ -128,7 +235,16 @@ export default function UploadPage() {
               </div>
 
               {/* Drag & Drop Zone */}
-              <div className="border-2 border-dashed border-slate-600 rounded-lg p-12 text-center hover:border-purple-500 transition-colors">
+              <div
+                className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
+                  isDragging
+                    ? "border-purple-500 bg-purple-500/10"
+                    : "border-slate-600 hover:border-purple-500"
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
                 <Upload className="h-12 w-12 text-slate-400 mx-auto mb-4" />
                 <p className="text-slate-300 font-medium mb-2">
                   Drag and drop files here
@@ -152,7 +268,7 @@ export default function UploadPage() {
                 </div>
                 <Button
                   onClick={handleUpload}
-                  disabled={uploading || files.every((f) => f.status === "completed")}
+                  disabled={uploading || files.every((f) => f.status === "completed") || files.every((f) => f.status === "error")}
                   className="bg-purple-600 hover:bg-purple-700"
                 >
                   {uploading ? (
@@ -221,6 +337,15 @@ export default function UploadPage() {
                         {isVideo(uploadFile.file) ? "Video" : "Image"}
                       </p>
 
+                      {/* Error Message */}
+                      {uploadFile.status === "error" && uploadFile.errorMessage && (
+                        <div className="mt-2">
+                          <p className="text-xs text-red-400 font-medium">
+                            {uploadFile.errorMessage}
+                          </p>
+                        </div>
+                      )}
+
                       {/* Progress Bar */}
                       {uploadFile.status === "uploading" && (
                         <div className="mt-2">
@@ -263,7 +388,7 @@ export default function UploadPage() {
             <ul className="space-y-2 text-slate-300 text-sm">
               <li className="flex items-start gap-2">
                 <span className="text-purple-400 mt-1">•</span>
-                <span>Maximum file size: 100MB per file</span>
+                <span>Maximum file size: 500MB per file</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-purple-400 mt-1">•</span>

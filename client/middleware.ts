@@ -17,14 +17,6 @@ export function middleware(request: NextRequest) {
   const authTokenCookie = request.cookies.get(AUTH_TOKEN_COOKIE);
   const authToken = authTokenCookie?.value;
   
-  // Debug logging (remove in production)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[Middleware] Path:', pathname);
-    console.log('[Middleware] Has token:', !!authToken);
-    console.log('[Middleware] Token value:', authToken ? 'present' : 'missing');
-    console.log('[Middleware] All cookies:', request.cookies.getAll().map(c => `${c.name}=${c.value.substring(0, 20)}...`));
-  }
-  
   // If no token and not on a public route, redirect to login
   if (!authToken) {
     const loginUrl = new URL('/login', request.url);

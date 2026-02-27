@@ -115,7 +115,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Footer */}
         <div className="p-4">
           <p className="text-xs text-slate-500 text-center">
-            © 2025 GoGaze. All rights reserved.
+            © {new Date().getFullYear()} GoGaze. All rights reserved.
           </p>
         </div>
       </aside>

@@ -56,10 +56,3 @@ export function removeAuthToken(): void {
   document.cookie = `${AUTH_TOKEN_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
 }
 
-/**
- * Check if user is authenticated (has valid token)
- */
-export function isAuthenticated(): boolean {
-  return getAuthToken() !== null;
-}
-

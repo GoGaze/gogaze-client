@@ -1,5 +1,7 @@
 // API service layer for GoGaze server integration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+// WebSocket URL — configurable via env var, fallback to server IP
+const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://13.233.206.39';
 
 export interface MediaFile {
   id: number;
@@ -184,7 +186,7 @@ export class WebSocketService {
    */
   connect(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const wsUrl = `ws://13.233.206.39/ws/display/${this.deviceId}/`;
+      const wsUrl = `${WS_BASE_URL}/ws/display/${this.deviceId}/`;
       
       try {
         this.socket = new WebSocket(wsUrl);

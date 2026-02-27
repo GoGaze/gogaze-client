@@ -24,14 +24,14 @@ services:
       timeout: 10s
       retries: 3
     deploy:
-      replicas: 3
+      replicas: 1  # t2.micro (1 vCPU, 1GB RAM) can only run 1 replica
       resources:
         limits:
-          cpus: '1.0'
-          memory: 1G
-        reservations:
           cpus: '0.5'
           memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.gogaze-prod.rule=Host(`gogaze.com`)"
@@ -58,11 +58,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
-        reservations:
           cpus: '0.25'
-          memory: 256M
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
   # Nginx for production
   nginx:
@@ -82,13 +82,13 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
           cpus: '0.25'
           memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
 
-  # Monitoring - Prometheus
+  # Monitoring - Prometheus (lightweight, keep on t2.micro)
   prometheus:
     image: prom/prometheus:latest
     ports:
@@ -102,10 +102,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '0.25'
+          memory: 128M
 
-  # Monitoring - Grafana
+  # Monitoring - Grafana (optional on t2.micro, disable if RAM is tight)
   grafana:
     image: grafana/grafana:latest
     ports:
@@ -123,53 +123,21 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 512M
+          cpus: '0.25'
+          memory: 128M
+    profiles:
+      - monitoring  # Only start with: docker compose --profile monitoring up
 
-  # Log aggregation - ELK Stack
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-    environment:
-      - discovery.type=single-node
-      - xpack.security.enabled=false
-    volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
-    networks:
-      - gogaze-production
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 2G
-
-  logstash:
-    image: docker.elastic.co/logstash/logstash:8.11.0
-    volumes:
-      - ./monitoring/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
-    networks:
-      - gogaze-production
-    restart: unless-stopped
-    depends_on:
-      - elasticsearch
-
-  kibana:
-    image: docker.elastic.co/kibana/kibana:8.11.0
-    ports:
-      - "5601:5601"
-    environment:
-      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-    networks:
-      - gogaze-production
-    restart: unless-stopped
-    depends_on:
-      - elasticsearch
+  # NOTE: ELK Stack (Elasticsearch, Logstash, Kibana) removed.
+  # Elasticsearch alone needs 2GB RAM — impossible on t2.micro (1GB total).
+  # For log aggregation on t2.micro, use:
+  #   - CloudWatch Logs (free tier: 5GB/month)
+  #   - Or Loki + Promtail (uses ~50MB RAM vs Elasticsearch's 2GB)
 
 volumes:
   redis_prod_data:
   prometheus_data:
   grafana_prod_data:
-  elasticsearch_data:
 
 networks:
   gogaze-production:

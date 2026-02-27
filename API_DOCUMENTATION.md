@@ -108,6 +108,24 @@ curl -X POST http://localhost:8000/api/media/ \
 }
 ```
 
+#### 7. Stop Media on Device
+- **Endpoint**: `POST /api/media/{id}/stop/`
+- **Description**: Send stop command to a specific device via WebSocket
+- **Parameters**:
+  - `id`: Media file ID (integer)
+- **Request Body**:
+```json
+{
+  "device_id": "device_001"
+}
+```
+- **Response**:
+```json
+{
+  "status": "stop command sent to device_001"
+}
+```
+
 ## WebSocket Endpoints
 
 ### Real-time Device Communication
@@ -121,10 +139,19 @@ curl -X POST http://localhost:8000/api/media/ \
   3. Server can send commands to all devices in the group
 
 #### WebSocket Message Format
+
+**Play Command:**
 ```json
 {
   "type": "play",
   "url": "/media/processed/video_processed.mp4"
+}
+```
+
+**Stop Command:**
+```json
+{
+  "type": "stop"
 }
 ```
 
@@ -281,7 +308,15 @@ curl -X POST http://localhost:8000/api/media/1/play/ \
   -d '{"device_id": "display_001"}'
 ```
 
-### 3. WebSocket Connection (JavaScript)
+### 3. Stop Video on Device
+```bash
+# Send stop command
+curl -X POST http://localhost:8000/api/media/1/stop/ \
+  -H "Content-Type: application/json" \
+  -d '{"device_id": "display_001"}'
+```
+
+### 4. WebSocket Connection (JavaScript)
 ```javascript
 const socket = new WebSocket('ws://localhost:8000/ws/display/device_001/');
 
@@ -295,6 +330,10 @@ socket.onmessage = function(event) {
         // Play the video
         videoElement.src = command.url;
         videoElement.play();
+    } else if (command.type === 'stop') {
+        // Stop the video
+        videoElement.pause();
+        videoElement.currentTime = 0;
     }
 };
 ```

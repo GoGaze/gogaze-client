@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { getFileType, getMediaFileUrl } from "@/lib/api";
+import { getFileType, getMediaFileUrl, MediaFile } from "@/lib/api";
 import {
   Search,
   Grid3x3,
@@ -17,14 +17,6 @@ import {
   Eye,
   Loader2,
 } from "lucide-react";
-
-interface MediaFile {
-  id: number;
-  title: string;
-  file: string;
-  processed_file?: string;
-  uploaded_at: string;
-}
 
 interface GalleryClientProps {
   mediaFiles: MediaFile[]; // Initial SSR data
