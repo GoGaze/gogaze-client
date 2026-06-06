@@ -1,14 +1,15 @@
-// middleware.ts
+// src/middleware.ts
+// NOTE: with a `src/` directory, Next.js looks for middleware HERE (next to
+// the app/ dir), not at the project root.
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 const SESSION_COOKIE = 'session';
-const PUBLIC_ROUTES = ['/login'];
 
 /**
  * Best-effort token check at the edge: decode the JWT and verify it has not
  * expired. The signature is verified server-side by Django on every API call;
- * this just avoids serving the app to an obviously stale/expired session.
+ * this just avoids serving the app shell to an obviously stale/expired session.
  */
 function isTokenLive(token: string): boolean {
   try {
@@ -25,16 +26,6 @@ function isTokenLive(token: string): boolean {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-
-  if (PUBLIC_ROUTES.includes(pathname)) {
-    return NextResponse.next();
-  }
-
-  // Display screens authenticate via their own device token, not a session.
-  if (pathname.startsWith('/display/')) {
-    return NextResponse.next();
-  }
-
   const token = request.cookies.get(SESSION_COOKIE)?.value;
 
   if (!token || !isTokenLive(token)) {
@@ -47,8 +38,14 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Gate the authenticated app routes. `/` is a client-side splash that
+  // redirects by auth state; `/login`, `/display/*`, API and static assets are
+  // intentionally not gated here.
   matcher: [
-    // Everything except API routes, Next internals, and static assets.
-    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/dashboard/:path*',
+    '/gallery/:path*',
+    '/upload/:path*',
+    '/devices/:path*',
+    '/settings/:path*',
   ],
 };
