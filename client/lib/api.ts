@@ -1,7 +1,7 @@
 // API service layer for GoGaze server integration
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 // WebSocket URL — configurable via env var, fallback to server IP
-const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://13.233.206.39';
+const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000';
 
 export interface MediaFile {
   id: number;
@@ -336,7 +336,7 @@ export const getFileType = (filename: string): 'video' | 'image' | 'other' => {
 export const getMediaFileUrl = (filePath: string): string => {
   // Convert Django media URL to full URL
   if (filePath.startsWith('/media/')) {
-    return `http://localhost:8000${filePath}`;
+    return `${API_BASE_URL.replace('/api', '')}${filePath}`;
   }
   return filePath;
 };

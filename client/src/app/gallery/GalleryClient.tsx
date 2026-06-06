@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getFileType, getMediaFileUrl, MediaFile } from "@/lib/api";
 import {
   Search,
@@ -15,42 +18,61 @@ import {
   Square,
   Trash2,
   Eye,
-  Loader2,
+  X,
+  FileVideo,
+  ExternalLink,
 } from "lucide-react";
 
 interface GalleryClientProps {
-  mediaFiles: MediaFile[]; // Initial SSR data
+  mediaFiles: MediaFile[];
 }
 
-export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientProps) {
+export function GalleryClient({
+  mediaFiles: initialMediaFiles,
+}: GalleryClientProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("all");
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>(initialMediaFiles);
   const [loading, setLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<MediaFile | null>(null);
 
-  // Fetch media files client-side so it appears in browser network tab
   useEffect(() => {
     const fetchMediaFiles = async () => {
       setLoading(true);
       try {
-        const response = await fetch('/api/media');
+        const response = await fetch("/api/media");
         if (response.ok) {
           const data = await response.json();
           setMediaFiles(data);
         }
       } catch (error) {
-        console.error('Error fetching media files:', error);
+        console.error("Error fetching media files:", error);
       } finally {
         setLoading(false);
       }
     };
-
     fetchMediaFiles();
   }, []);
 
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedFile) {
+        setSelectedFile(null);
+      }
+    },
+    [selectedFile]
+  );
+
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
+
   const filteredMedia = mediaFiles.filter((item) => {
-    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = item.title
+      .toLowerCase()
+      .includes(searchQuery.toLowerCase());
     const fileType = getFileType(item.file);
     const matchesTab =
       selectedTab === "all" ||
@@ -62,13 +84,10 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
   const handleDelete = async (id: number) => {
     if (confirm("Are you sure you want to delete this file?")) {
       try {
-        const response = await fetch(`/api/media/${id}`, {
-          method: 'DELETE',
-        });
-        
+        const response = await fetch(`/api/media/${id}`, { method: "DELETE" });
         if (response.ok) {
-          // Refresh media files list
-          const refreshResponse = await fetch('/api/media');
+          if (selectedFile?.id === id) setSelectedFile(null);
+          const refreshResponse = await fetch("/api/media");
           if (refreshResponse.ok) {
             const data = await refreshResponse.json();
             setMediaFiles(data);
@@ -88,13 +107,10 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
     if (deviceId) {
       try {
         const response = await fetch(`/api/media/${id}/play`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ device_id: deviceId }),
         });
-        
         if (response.ok) {
           alert("Play command sent to device!");
         } else {
@@ -112,13 +128,10 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
     if (deviceId) {
       try {
         const response = await fetch(`/api/media/${id}/stop`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ device_id: deviceId }),
         });
-        
         if (response.ok) {
           alert("Stop command sent to device!");
         } else {
@@ -131,272 +144,360 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
     }
   };
 
+  const toggleSelect = (item: MediaFile) => {
+    setSelectedFile((prev) => (prev?.id === item.id ? null : item));
+  };
+
   return (
-    <div className="p-8">
+    <div className="p-6 lg:p-8 h-full flex flex-col">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Gallery</h1>
-        <p className="text-slate-400">Browse and manage your uploaded media files</p>
+      <h1 className="text-2xl font-semibold text-foreground mb-6">Gallery</h1>
+
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between mb-4">
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search files..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 bg-secondary border-input"
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <Tabs
+            value={selectedTab}
+            onValueChange={setSelectedTab}
+          >
+            <TabsList className="h-8 bg-secondary">
+              <TabsTrigger value="all" className="text-xs px-3 h-6">
+                All ({mediaFiles.length})
+              </TabsTrigger>
+              <TabsTrigger value="videos" className="text-xs px-3 h-6">
+                Videos (
+                {
+                  mediaFiles.filter((m) => getFileType(m.file) === "video")
+                    .length
+                }
+                )
+              </TabsTrigger>
+              <TabsTrigger value="images" className="text-xs px-3 h-6">
+                Images (
+                {
+                  mediaFiles.filter((m) => getFileType(m.file) === "image")
+                    .length
+                }
+                )
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="flex gap-1">
+            <Button
+              variant={viewMode === "grid" ? "default" : "ghost"}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setViewMode("grid")}
+            >
+              <Grid3x3 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "default" : "ghost"}
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setViewMode("list")}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
 
-      {/* Filters & Search */}
-      <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm mb-6">
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-            {/* Search */}
-            <div className="relative flex-1 w-full md:max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search files..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-slate-700/50 border-slate-600 text-white"
-              />
+      {/* Content area with optional preview panel */}
+      <div className="flex-1 flex gap-4 min-h-0">
+        {/* File grid/list */}
+        <div className="flex-1 min-w-0">
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Card key={i} className="border-border bg-card overflow-hidden">
+                  <Skeleton className="aspect-video w-full" />
+                  <CardContent className="p-3 space-y-2">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-
-            {/* View Toggle */}
-            <div className="flex gap-2">
-              <Button
-                variant={viewMode === "grid" ? "default" : "outline"}
-                size="icon"
-                onClick={() => setViewMode("grid")}
-                className={
-                  viewMode === "grid"
-                    ? "bg-purple-600 hover:bg-purple-700"
-                    : "border-slate-600 text-slate-300 hover:bg-slate-700"
-                }
-              >
-                <Grid3x3 className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "list" ? "default" : "outline"}
-                size="icon"
-                onClick={() => setViewMode("list")}
-                className={
-                  viewMode === "list"
-                    ? "bg-purple-600 hover:bg-purple-700"
-                    : "border-slate-600 text-slate-300 hover:bg-slate-700"
-                }
-              >
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tabs */}
-      <Tabs value={selectedTab} onValueChange={setSelectedTab} className="mb-6">
-        <TabsList className="bg-slate-800 border border-slate-700">
-          <TabsTrigger value="all" className="data-[state=active]:bg-purple-600">
-            All ({mediaFiles.length})
-          </TabsTrigger>
-          <TabsTrigger value="videos" className="data-[state=active]:bg-purple-600">
-            Videos ({mediaFiles.filter((m) => getFileType(m.file) === "video").length})
-          </TabsTrigger>
-          <TabsTrigger value="images" className="data-[state=active]:bg-purple-600">
-            Images ({mediaFiles.filter((m) => getFileType(m.file) === "image").length})
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {/* Media Grid/List */}
-      {loading ? (
-        <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm">
-          <CardContent className="py-16">
-            <div className="text-center text-slate-400">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-              <p className="text-lg mb-2">Loading media files...</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : filteredMedia.length === 0 ? (
-        <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm">
-          <CardContent className="py-16">
-            <div className="text-center text-slate-400">
-              <p className="text-lg mb-2">No media files found</p>
-              <p className="text-sm">Upload your first media file to get started</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredMedia.map((item) => {
-            const fileType = getFileType(item.file);
-            const fileUrl = getMediaFileUrl(item.file);
-            const uploadDate = new Date(item.uploaded_at).toLocaleDateString();
-            
-            return (
-              <Card
-                key={item.id}
-                className="border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:border-purple-500 transition-all group overflow-hidden"
-              >
-                <div className="relative aspect-video overflow-hidden">
-                  {fileType === "image" ? (
-                    <img
-                      src={fileUrl}
-                      alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-slate-700 flex items-center justify-center">
-                      <Play className="h-12 w-12 text-slate-400" />
-                    </div>
-                  )}
-                  {fileType === "video" && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                      <div className="h-12 w-12 rounded-full bg-white/90 flex items-center justify-center">
-                        <Play className="h-6 w-6 text-slate-900 ml-1" />
-                      </div>
-                    </div>
-                  )}
-                  <div className="absolute top-2 right-2">
-                    <Badge
-                      variant="secondary"
-                      className={
-                        fileType === "video"
-                          ? "bg-purple-600/90 text-white"
-                          : "bg-pink-600/90 text-white"
-                      }
-                    >
-                      {fileType}
-                    </Badge>
-                  </div>
-                </div>
-                <CardContent className="p-4">
-                  <h3 className="text-white font-medium truncate mb-1">{item.title}</h3>
-                  <p className="text-xs text-slate-400 mb-3">
-                    {uploadDate}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1 border-slate-600 text-slate-300 hover:bg-slate-700"
-                      onClick={() => window.open(fileUrl, '_blank')}
-                    >
-                      <Eye className="h-3 w-3 mr-1" />
-                      View
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-slate-600 text-green-400 hover:bg-green-900/20"
-                      onClick={() => handlePlay(item.id)}
-                      title="Play on device"
-                    >
-                      <Play className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-slate-600 text-yellow-400 hover:bg-yellow-900/20"
-                      onClick={() => handleStop(item.id)}
-                      title="Stop on device"
-                    >
-                      <Square className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-slate-600 text-red-400 hover:bg-red-900/20"
-                      onClick={() => handleDelete(item.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      ) : (
-        <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm">
-          <CardContent className="p-0">
-            <div className="divide-y divide-slate-700">
+          ) : filteredMedia.length === 0 ? (
+            <Card className="border-border bg-card">
+              <CardContent className="py-16 text-center">
+                <p className="text-muted-foreground">No media files found</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Upload your first media file to get started
+                </p>
+              </CardContent>
+            </Card>
+          ) : viewMode === "grid" ? (
+            <div
+              className={`grid gap-4 ${
+                selectedFile
+                  ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"
+                  : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              }`}
+            >
               {filteredMedia.map((item) => {
                 const fileType = getFileType(item.file);
                 const fileUrl = getMediaFileUrl(item.file);
-                const uploadDate = new Date(item.uploaded_at).toLocaleDateString();
-                
+                const uploadDate = new Date(
+                  item.uploaded_at
+                ).toLocaleDateString();
+                const isSelected = selectedFile?.id === item.id;
+
                 return (
-                  <div
+                  <Card
                     key={item.id}
-                    className="flex items-center gap-4 p-4 hover:bg-slate-700/30 transition-colors"
+                    className={`border-border bg-card overflow-hidden group cursor-pointer transition-colors ${
+                      isSelected
+                        ? "ring-2 ring-primary border-primary"
+                        : "hover:border-primary/40"
+                    }`}
+                    onClick={() => toggleSelect(item)}
                   >
-                    {fileType === "image" ? (
-                      <img
-                        src={fileUrl}
-                        alt={item.title}
-                        className="h-16 w-24 object-cover rounded"
-                      />
-                    ) : (
-                      <div className="h-16 w-24 bg-slate-700 rounded flex items-center justify-center">
-                        <Play className="h-6 w-6 text-slate-400" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-white font-medium truncate">{item.title}</h3>
+                    <div className="relative aspect-video overflow-hidden bg-secondary">
+                      {fileType === "image" ? (
+                        <img
+                          src={fileUrl}
+                          alt={item.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <FileVideo className="h-10 w-10 text-muted-foreground" />
+                        </div>
+                      )}
+                      {fileType === "video" && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                          <div className="h-10 w-10 rounded-full bg-white/90 flex items-center justify-center">
+                            <Play className="h-5 w-5 text-black ml-0.5" />
+                          </div>
+                        </div>
+                      )}
+                      <div className="absolute top-2 right-2">
                         <Badge
-                          variant="outline"
-                          className={
-                            fileType === "video"
-                              ? "bg-purple-500/20 text-purple-300 border-purple-500"
-                              : "bg-pink-500/20 text-pink-300 border-pink-500"
-                          }
+                          variant="secondary"
+                          className="text-xs bg-background/80 backdrop-blur-sm text-foreground"
                         >
                           {fileType}
                         </Badge>
                       </div>
-                      <p className="text-sm text-slate-400">
-                        Uploaded {uploadDate}
+                    </div>
+                    <CardContent className="p-3">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {item.title}
                       </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                        onClick={() => window.open(fileUrl, '_blank')}
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-slate-600 text-green-400 hover:bg-green-900/20"
-                        onClick={() => handlePlay(item.id)}
-                        title="Play on device"
-                      >
-                        <Play className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-slate-600 text-yellow-400 hover:bg-yellow-900/20"
-                        onClick={() => handleStop(item.id)}
-                        title="Stop on device"
-                      >
-                        <Square className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-slate-600 text-red-400 hover:bg-red-900/20"
-                        onClick={() => handleDelete(item.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {uploadDate}
+                      </p>
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <Card className="border-border bg-card">
+              <CardContent className="p-0">
+                <div className="divide-y divide-border">
+                  {filteredMedia.map((item) => {
+                    const fileType = getFileType(item.file);
+                    const fileUrl = getMediaFileUrl(item.file);
+                    const uploadDate = new Date(
+                      item.uploaded_at
+                    ).toLocaleDateString();
+                    const isSelected = selectedFile?.id === item.id;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex items-center gap-4 p-3 cursor-pointer transition-colors ${
+                          isSelected
+                            ? "bg-primary/5"
+                            : "hover:bg-secondary/50"
+                        }`}
+                        onClick={() => toggleSelect(item)}
+                      >
+                        {fileType === "image" ? (
+                          <img
+                            src={fileUrl}
+                            alt={item.title}
+                            className="h-12 w-18 object-cover rounded"
+                          />
+                        ) : (
+                          <div className="h-12 w-18 bg-secondary rounded flex items-center justify-center">
+                            <FileVideo className="h-5 w-5 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-foreground truncate">
+                              {item.title}
+                            </p>
+                            <Badge variant="outline" className="text-xs">
+                              {fileType}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {uploadDate}
+                          </p>
+                        </div>
+                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            onClick={() => window.open(fileUrl, "_blank")}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-green-400 hover:text-green-300"
+                            onClick={() => handlePlay(item.id)}
+                          >
+                            <Play className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            onClick={() => handleDelete(item.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Preview Panel */}
+        {selectedFile && (
+          <div className="w-[400px] shrink-0 border border-border bg-card rounded-lg overflow-hidden flex flex-col transition-all duration-200">
+            {/* Panel header */}
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h3 className="text-sm font-medium text-foreground truncate pr-2">
+                {selectedFile.title}
+              </h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                onClick={() => setSelectedFile(null)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <ScrollArea className="flex-1">
+              <div className="p-4 space-y-4">
+                {/* Preview */}
+                <div className="rounded-md overflow-hidden bg-secondary">
+                  {getFileType(selectedFile.file) === "image" ? (
+                    <img
+                      src={getMediaFileUrl(selectedFile.file)}
+                      alt={selectedFile.title}
+                      className="w-full object-contain max-h-64"
+                    />
+                  ) : (
+                    <video
+                      src={getMediaFileUrl(selectedFile.file)}
+                      controls
+                      className="w-full max-h-64"
+                    />
+                  )}
+                </div>
+
+                {/* Details */}
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">
+                      File name
+                    </p>
+                    <p className="text-sm text-foreground">
+                      {selectedFile.title}
+                    </p>
+                  </div>
+                  <div className="flex gap-6">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Type</p>
+                      <Badge variant="outline" className="text-xs">
+                        {getFileType(selectedFile.file)}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        Uploaded
+                      </p>
+                      <p className="text-sm text-foreground">
+                        {new Date(
+                          selectedFile.uploaded_at
+                        ).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Actions */}
+                <div className="space-y-2">
+                  <Button
+                    className="w-full justify-start"
+                    variant="outline"
+                    onClick={() => handlePlay(selectedFile.id)}
+                  >
+                    <Play className="mr-2 h-4 w-4" />
+                    Play on Device
+                  </Button>
+                  <Button
+                    className="w-full justify-start"
+                    variant="outline"
+                    onClick={() => handleStop(selectedFile.id)}
+                  >
+                    <Square className="mr-2 h-4 w-4" />
+                    Stop Playback
+                  </Button>
+                  <Button
+                    className="w-full justify-start"
+                    variant="outline"
+                    onClick={() =>
+                      window.open(
+                        getMediaFileUrl(selectedFile.file),
+                        "_blank"
+                      )
+                    }
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Open Original
+                  </Button>
+                  <Button
+                    className="w-full justify-start text-destructive hover:text-destructive"
+                    variant="outline"
+                    onClick={() => handleDelete(selectedFile.id)}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
