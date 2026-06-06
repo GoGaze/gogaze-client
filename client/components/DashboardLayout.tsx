@@ -21,6 +21,7 @@ import {
   LayoutDashboard,
   Upload,
   Image as ImageIcon,
+  MonitorSmartphone,
   Settings,
   ChevronsLeft,
   ChevronsRight,
@@ -35,6 +36,7 @@ const menuItems = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { title: "Upload", href: "/upload", icon: Upload },
   { title: "Gallery", href: "/gallery", icon: ImageIcon },
+  { title: "Devices", href: "/devices", icon: MonitorSmartphone },
   { title: "Settings", href: "/settings", icon: Settings },
 ];
 

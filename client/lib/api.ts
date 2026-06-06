@@ -17,6 +17,8 @@ export interface MediaFile {
   title: string;
   file: string;
   processed_file?: string;
+  transcode_status?: 'pending' | 'processing' | 'completed' | 'failed';
+  file_size_display?: string;
   uploaded_at: string;
   // Playback stats
   total_play_count?: number;
@@ -103,7 +105,8 @@ async function handleResponse<T>(response: Response): Promise<T> {
     
     try {
       errorData = await response.json();
-      errorMessage = errorData.detail || errorData.message || errorMessage;
+      errorMessage =
+        errorData.detail || errorData.error || errorData.message || errorMessage;
     } catch {
       // If response is not JSON, use the status text
     }

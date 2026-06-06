@@ -20,17 +20,40 @@ import { signOut } from "@/lib/auth";
 import {
   updatePassword,
   reauthenticateWithCredential,
+  sendEmailVerification,
   EmailAuthProvider,
 } from "firebase/auth";
 import { FirebaseError } from "firebase/app";
-import { LogOut, Key, Shield, Loader2 } from "lucide-react";
+import { useToast } from "@/components/ui/toast";
+import { LogOut, Key, Shield, Loader2, MailCheck } from "lucide-react";
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [sendingVerification, setSendingVerification] = useState(false);
+
+  const handleResendVerification = async () => {
+    if (!user) return;
+    setSendingVerification(true);
+    try {
+      await sendEmailVerification(user);
+      toast({
+        title: "Verification email sent",
+        description: "Check your inbox to verify your address.",
+        variant: "success",
+      });
+    } catch (err) {
+      const message =
+        err instanceof FirebaseError ? err.message : "Could not send verification email.";
+      toast({ title: "Failed to send", description: message, variant: "error" });
+    } finally {
+      setSendingVerification(false);
+    }
+  };
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -140,13 +163,30 @@ export default function SettingsPage() {
               </div>
               <div>
                 <p className="text-muted-foreground mb-1">Email verified</p>
-                <p className="text-foreground">
-                  {user?.emailVerified ? (
-                    <span className="text-green-400">Verified</span>
-                  ) : (
+                {user?.emailVerified ? (
+                  <span className="text-green-400">Verified</span>
+                ) : (
+                  <div className="flex items-center gap-2">
                     <span className="text-yellow-400">Not verified</span>
-                  )}
-                </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7"
+                      onClick={handleResendVerification}
+                      disabled={sendingVerification}
+                    >
+                      {sendingVerification ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <>
+                          <MailCheck className="mr-1.5 h-3.5 w-3.5" />
+                          Resend
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
