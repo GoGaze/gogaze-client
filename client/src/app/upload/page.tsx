@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,9 @@ export default function UploadPage() {
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  // Latest files, readable inside uploadOne so a title edited mid-batch is sent.
+  const filesRef = useRef<UploadFile[]>(files);
+  filesRef.current = files;
 
   const processFiles = (fileList: File[]) => {
     const newFiles: UploadFile[] = fileList.map((file) => {
@@ -105,7 +108,10 @@ export default function UploadPage() {
     new Promise((resolve) => {
       const xhr = new XMLHttpRequest();
       const formData = new FormData();
-      formData.append("title", uploadFile.title.trim() || uploadFile.file.name);
+      // Read the latest title (it may have been edited while queued).
+      const latest = filesRef.current.find((f) => f.id === uploadFile.id);
+      const title = (latest?.title ?? uploadFile.title).trim() || uploadFile.file.name;
+      formData.append("title", title);
       formData.append("file", uploadFile.file);
 
       xhr.upload.addEventListener("progress", (event) => {

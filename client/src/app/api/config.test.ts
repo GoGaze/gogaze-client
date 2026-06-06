@@ -34,6 +34,15 @@ describe("relay", () => {
     expect(res.status).toBe(409);
     expect(await res.text()).toBe('{"ok":false}');
   });
+
+  it("does not throw on a 204 (Django DELETE) and emits no body", async () => {
+    // A non-null body with a 204 throws in the Response constructor — relay must
+    // handle null-body statuses so DELETE proxies don't 502.
+    const upstream = new Response(null, { status: 204 });
+    const res = await relay(upstream);
+    expect(res.status).toBe(204);
+    expect(await res.text()).toBe("");
+  });
 });
 
 describe("upstreamError", () => {

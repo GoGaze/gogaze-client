@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { API_BASE_URL, authHeaders, relay, upstreamError } from '../config';
 
 // Route segment config for App Router
@@ -37,7 +37,11 @@ export async function POST(request: NextRequest) {
     } catch (fetchError) {
       clearTimeout(timeoutId);
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        return upstreamError(fetchError, 'POST /media (upload timeout)');
+        // 504 so the upload page shows a timeout message (502 -> "backend down").
+        return NextResponse.json(
+          { error: 'Upload timed out — the file may be too large or the connection too slow.' },
+          { status: 504 },
+        );
       }
       throw fetchError;
     }

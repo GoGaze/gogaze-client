@@ -23,6 +23,11 @@ export function authHeaders(request: NextRequest): Record<string, string> {
  * code and body instead of collapsing everything into a 500.
  */
 export async function relay(upstream: Response): Promise<NextResponse> {
+  // 204/205/304 are null-body statuses — the Response constructor throws if
+  // given ANY body (even ''). Django returns 204 on DELETE, so this matters.
+  if (upstream.status === 204 || upstream.status === 205 || upstream.status === 304) {
+    return new NextResponse(null, { status: upstream.status });
+  }
   const body = await upstream.text();
   const contentType = upstream.headers.get('content-type') ?? 'application/json';
   return new NextResponse(body, {
