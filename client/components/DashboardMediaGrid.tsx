@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Play, FileVideo } from "lucide-react";
+import { Play, FileVideo, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,16 +12,67 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getFileType, getMediaFileUrl, MediaFile } from "@/lib/api";
+import { DevicePickerDialog } from "@/components/DevicePickerDialog";
+import { useToast } from "@/components/ui/toast";
+import {
+  getFileType,
+  getMediaFileUrl,
+  mediaApi,
+  ApiError,
+  MediaFile,
+} from "@/lib/api";
+
+type PickerAction = "play" | "stop";
 
 /**
  * Client-side recent-uploads grid for the dashboard. Clicking a card opens a
- * modal preview (video player / image), mirroring the gallery's behaviour —
- * the dashboard page is a Server Component and can't handle the click itself.
+ * modal preview (video player / image) with "Play on Device" / "Stop" actions
+ * that reuse the gallery's device picker — the dashboard page is a Server
+ * Component and can't handle the interactivity itself.
  */
 export function DashboardMediaGrid({ mediaFiles }: { mediaFiles: MediaFile[] }) {
+  const { toast } = useToast();
   const [selected, setSelected] = useState<MediaFile | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerAction, setPickerAction] = useState<PickerAction>("play");
+  const [pendingMediaId, setPendingMediaId] = useState<number | null>(null);
   const selectedType = selected ? getFileType(selected.file) : null;
+
+  const openPicker = (action: PickerAction, id: number) => {
+    setPickerAction(action);
+    setPendingMediaId(id);
+    setSelected(null); // close the preview modal so the picker isn't nested
+    setPickerOpen(true);
+  };
+
+  const onDeviceSelected = async (deviceId: string) => {
+    if (pendingMediaId == null) return;
+    const id = pendingMediaId;
+    try {
+      if (pickerAction === "play") {
+        await mediaApi.playMediaOnDevice(id, deviceId);
+        toast({
+          title: "Play command sent",
+          description: `Now playing on ${deviceId}.`,
+          variant: "success",
+        });
+      } else {
+        await mediaApi.stopMediaOnDevice(id, deviceId);
+        toast({
+          title: "Stop command sent",
+          description: `Stopped on ${deviceId}.`,
+          variant: "success",
+        });
+      }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Request failed.";
+      toast({
+        title: `Could not ${pickerAction}`,
+        description: message,
+        variant: "error",
+      });
+    }
+  };
 
   return (
     <>
@@ -104,30 +155,56 @@ export function DashboardMediaGrid({ mediaFiles }: { mediaFiles: MediaFile[] }) 
             </DialogTitle>
           </DialogHeader>
           {selected && (
-            <div className="overflow-hidden rounded-md bg-secondary">
-              {selectedType === "video" ? (
-                <video
-                  src={getMediaFileUrl(selected.file)}
-                  controls
-                  autoPlay
-                  className="w-full max-h-[70vh]"
-                />
-              ) : selectedType === "image" ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={getMediaFileUrl(selected.file)}
-                  alt={selected.title}
-                  className="w-full max-h-[70vh] object-contain"
-                />
-              ) : (
-                <div className="flex h-40 items-center justify-center">
-                  <FileVideo className="h-10 w-10 text-muted-foreground" />
-                </div>
-              )}
+            <div className="space-y-3">
+              <div className="overflow-hidden rounded-md bg-secondary">
+                {selectedType === "video" ? (
+                  <video
+                    src={getMediaFileUrl(selected.file)}
+                    controls
+                    autoPlay
+                    className="w-full max-h-[60vh]"
+                  />
+                ) : selectedType === "image" ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={getMediaFileUrl(selected.file)}
+                    alt={selected.title}
+                    className="w-full max-h-[60vh] object-contain"
+                  />
+                ) : (
+                  <div className="flex h-40 items-center justify-center">
+                    <FileVideo className="h-10 w-10 text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="default"
+                  className="flex-1"
+                  onClick={() => openPicker("play", selected.id)}
+                >
+                  <Play className="mr-2 h-4 w-4" /> Play on Device
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => openPicker("stop", selected.id)}
+                >
+                  <Square className="mr-2 h-4 w-4" /> Stop
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      <DevicePickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onSelect={onDeviceSelected}
+        title={pickerAction === "play" ? "Play on device" : "Stop on device"}
+        onlineOnly={pickerAction === "play"}
+      />
     </>
   );
 }
