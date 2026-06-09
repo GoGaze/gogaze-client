@@ -2,8 +2,8 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
-  // Required for Docker deployment — produces .next/standalone
-  output: 'standalone',
+  // NOTE: `output: 'standalone'` removed — it's a Docker/self-hosting setting
+  // that breaks Vercel's per-route serverless function build (caused /api/* 404s).
   // Pin the workspace root to THIS project. A stray pnpm-lock.yaml in a parent
   // directory made Next infer the wrong root (breaking middleware resolution).
   turbopack: {
