@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GoGaze Client
 
-## Getting Started
+Next.js 15 (App Router, React 19, TypeScript, Tailwind v4) frontend for GoGaze —
+media management with real-time control of display devices.
 
-First, run the development server:
+This is one of two repos:
+
+- **`GoGaze/gogaze-client`** (this repo) — the Next.js frontend.
+- **`GoGaze/server`** — the Django + Channels backend.
+
+## Prerequisites
+
+- Node.js 20+
+- A running GoGaze backend (see the server repo's README) — Django on `:8000`,
+  Redis on `:6379`, PostgreSQL, and FFmpeg for transcoding.
+- A Firebase project (Email/Password and/or Google auth enabled).
+
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env.local   # then fill in the values
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment (`.env.local`)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+See `.env.example`. Key variables:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Purpose |
+|---|---|
+| `API_BASE_URL` | Server-side URL the Next proxy uses to reach Django |
+| `NEXT_PUBLIC_API_URL` | Browser-facing API origin (resolves `/media/` URLs) |
+| `NEXT_PUBLIC_WS_URL` | WebSocket base for the display screen |
+| `NEXT_PUBLIC_FIREBASE_*` | Firebase web config |
 
-## Learn More
+`NEXT_PUBLIC_*` values are **inlined at build time** — for Docker you must pass
+them as `--build-arg`s (the `Dockerfile` and CI already wire this up).
 
-To learn more about Next.js, take a look at the following resources:
+## Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Command | Description |
+|---|---|
+| `npm run dev` | Dev server (Turbopack) |
+| `npm run build` | Production build (standalone output) |
+| `npm run lint` / `lint:fix` | ESLint |
+| `npm run type-check` | `tsc --noEmit` |
+| `npm test` | Run the Vitest suite |
+| `npm run test:coverage` | Tests with coverage |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Auth model
 
-## Deploy on Vercel
+- Firebase Auth on the client. After sign-in, the ID token is POSTed to
+  `/api/auth/session`, which stores it in an **HttpOnly, Secure, SameSite=Strict**
+  cookie (never readable by JS).
+- Same-origin requests to `/api/*` automatically carry that cookie; the Next
+  route handlers forward it to Django as `Authorization: Bearer <token>`.
+- Django verifies the token against Google's public keys (no service account
+  needed) and enforces `IsAuthenticated` on every endpoint.
+- `middleware.ts` checks token expiry at the edge; `AuthGuard` gates client UI.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Devices & the display screen
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Register a device on **/devices** — you get a one-time token + a display URL.
+2. Open that URL (`/display/<deviceId>?token=...`) on the screen device. It
+   connects over WebSocket (token-authenticated) and shows live online status.
+3. From **/gallery**, pick an online device to play/stop media on it.
+
+## Docker
+
+```bash
+docker build -t gogaze-client \
+  --build-arg NEXT_PUBLIC_API_URL=... \
+  --build-arg NEXT_PUBLIC_FIREBASE_API_KEY=... \
+  .
+# or: docker compose up   (see docker-compose*.yml)
+```

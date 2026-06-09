@@ -1,133 +1,152 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { getMediaFiles } from "@/lib/server-api";
+import { getFileType, getMediaFileUrl, MediaFile } from "@/lib/api";
 import Link from "next/link";
-import { Upload, Image as ImageIcon, Cpu, Activity } from "lucide-react";
+import { Upload, Image as ImageIcon, Play, FileVideo } from "lucide-react";
 
 export default async function DashboardPage() {
-  const mediaFiles = await getMediaFiles();
+  const mediaFiles: MediaFile[] = await getMediaFiles();
 
-  const stats = [
-    {
-      title: "Total Uploads",
-      value: mediaFiles.length.toString(),
-      description: "Videos and Photos",
-      icon: Upload,
-      color: "text-blue-500",
-    },
-    {
-      title: "Media Files",
-      value: mediaFiles.length.toString(),
-      description: "In gallery",
-      icon: ImageIcon,
-      color: "text-purple-500",
-    },
-    {
-      title: "Active Devices",
-      value: "0",
-      description: "Raspberry Pi connected",
-      icon: Cpu,
-      color: "text-green-500",
-    },
-    {
-      title: "Status",
-      value: "Online",
-      description: "System operational",
-      icon: Activity,
-      color: "text-emerald-500",
-    },
-  ];
+  const videoCount = mediaFiles.filter(
+    (m) => getFileType(m.file) === "video"
+  ).length;
+  const imageCount = mediaFiles.filter(
+    (m) => getFileType(m.file) === "image"
+  ).length;
 
   return (
     <DashboardLayout>
-      <div className="p-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
-          <p className="text-slate-400">Welcome back to your media dashboard</p>
+      <div className="p-6 lg:p-8 space-y-6">
+        {/* Header with inline stats */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span>
+              <span className="font-medium text-foreground">
+                {mediaFiles.length}
+              </span>{" "}
+              uploads
+            </span>
+            <span className="text-border">|</span>
+            <span>
+              <span className="font-medium text-foreground">{videoCount}</span>{" "}
+              videos
+            </span>
+            <span className="text-border">|</span>
+            <span>
+              <span className="font-medium text-foreground">{imageCount}</span>{" "}
+              images
+            </span>
+          </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          {stats.map((stat) => {
-            const Icon = stat.icon;
-            return (
-              <Card key={stat.title} className="border-slate-700 bg-slate-800/50 backdrop-blur-sm">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium text-slate-200">
-                    {stat.title}
-                  </CardTitle>
-                  <Icon className={`h-5 w-5 ${stat.color}`} />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-white">{stat.value}</div>
-                  <p className="text-xs text-slate-400 mt-1">{stat.description}</p>
-                </CardContent>
-              </Card>
-            );
-          })}
+        {/* Quick actions */}
+        <div className="flex gap-3">
+          <Button asChild>
+            <Link href="/upload">
+              <Upload className="mr-2 h-4 w-4" />
+              Upload New
+            </Link>
+          </Button>
+          <Button variant="outline" asChild>
+            <Link href="/gallery">
+              <ImageIcon className="mr-2 h-4 w-4" />
+              Browse Gallery
+            </Link>
+          </Button>
         </div>
 
-        {/* Quick Actions */}
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Link href="/upload">
-            <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:bg-slate-800/70 transition-all cursor-pointer">
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-purple-600/20 flex items-center justify-center mb-4">
-                  <Upload className="h-6 w-6 text-purple-400" />
-                </div>
-                <CardTitle className="text-white">Upload Media</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Upload videos and photos to your gallery
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-
-          <Link href="/gallery">
-            <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:bg-slate-800/70 transition-all cursor-pointer">
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-blue-600/20 flex items-center justify-center mb-4">
-                  <ImageIcon className="h-6 w-6 text-blue-400" />
-                </div>
-                <CardTitle className="text-white">View Gallery</CardTitle>
-                <CardDescription className="text-slate-400">
-                  Browse all your uploaded media files
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-
-          <Link href="/devices">
-            <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:bg-slate-800/70 transition-all cursor-pointer">
-              <CardHeader>
-                <div className="h-12 w-12 rounded-lg bg-green-600/20 flex items-center justify-center mb-4">
-                  <Cpu className="h-6 w-6 text-green-400" />
-                </div>
-                <CardTitle className="text-white">Manage Devices</CardTitle>
-                <CardDescription className="text-slate-400">
-                  View and control Raspberry Pi devices
-                </CardDescription>
-              </CardHeader>
-            </Card>
-          </Link>
-        </div>
-
-        {/* Recent Activity */}
-        <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm mt-8">
-          <CardHeader>
-            <CardTitle className="text-white">Recent Activity</CardTitle>
-            <CardDescription className="text-slate-400">
-              Your latest uploads and device activities
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center py-8 text-slate-400">
-              <p>No recent activity</p>
-              <p className="text-sm mt-2">Upload your first media file to get started</p>
+        {/* Recent uploads grid */}
+        {mediaFiles.length === 0 ? (
+          <Card className="border-border bg-card">
+            <CardContent className="py-20 text-center">
+              <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-4" />
+              <h2 className="text-lg font-medium text-foreground mb-1">
+                No media yet
+              </h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Upload your first file to get started
+              </p>
+              <Button asChild>
+                <Link href="/upload">
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-medium text-muted-foreground">
+                Recent uploads
+              </h2>
             </div>
-          </CardContent>
-        </Card>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {mediaFiles.slice(0, 12).map((item) => {
+                const fileType = getFileType(item.file);
+                const fileUrl = getMediaFileUrl(item.file);
+                const uploadDate = new Date(
+                  item.uploaded_at
+                ).toLocaleDateString();
+
+                return (
+                  <Card
+                    key={item.id}
+                    className="border-border bg-card overflow-hidden group hover:border-primary/40 transition-colors"
+                  >
+                    <div className="relative aspect-video overflow-hidden bg-secondary">
+                      {fileType === "image" ? (
+                        <img
+                          src={fileUrl}
+                          alt={item.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <FileVideo className="h-10 w-10 text-muted-foreground" />
+                        </div>
+                      )}
+                      {fileType === "video" && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                          <div className="h-10 w-10 rounded-full bg-white/90 flex items-center justify-center">
+                            <Play className="h-5 w-5 text-background ml-0.5" />
+                          </div>
+                        </div>
+                      )}
+                      <div className="absolute top-2 right-2">
+                        <Badge
+                          variant="secondary"
+                          className="text-xs bg-background/80 backdrop-blur-sm text-foreground"
+                        >
+                          {fileType}
+                        </Badge>
+                      </div>
+                    </div>
+                    <CardContent className="p-3">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {item.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {uploadDate}
+                      </p>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+            {mediaFiles.length > 12 && (
+              <div className="text-center">
+                <Button variant="outline" asChild>
+                  <Link href="/gallery">View all {mediaFiles.length} files</Link>
+                </Button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </DashboardLayout>
   );

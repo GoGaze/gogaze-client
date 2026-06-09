@@ -1,12 +1,26 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { getFileType, getMediaFileUrl, MediaFile } from "@/lib/api";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { DevicePickerDialog } from "@/components/DevicePickerDialog";
+import { useToast } from "@/components/ui/toast";
+import { getFileType, getMediaFileUrl, mediaApi, ApiError, MediaFile } from "@/lib/api";
 import {
   Search,
   Grid3x3,
@@ -15,39 +29,70 @@ import {
   Square,
   Trash2,
   Eye,
-  Loader2,
+  X,
+  FileVideo,
+  File as FileIcon,
+  ExternalLink,
+  Pencil,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 
 interface GalleryClientProps {
-  mediaFiles: MediaFile[]; // Initial SSR data
+  mediaFiles: MediaFile[];
 }
 
+type PickerAction = "play" | "stop";
+
 export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientProps) {
+  const { toast } = useToast();
+
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("all");
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>(initialMediaFiles);
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<MediaFile | null>(null);
 
-  // Fetch media files client-side so it appears in browser network tab
-  useEffect(() => {
-    const fetchMediaFiles = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch('/api/media');
-        if (response.ok) {
-          const data = await response.json();
-          setMediaFiles(data);
-        }
-      } catch (error) {
-        console.error('Error fetching media files:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Device picker
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerAction, setPickerAction] = useState<PickerAction>("play");
+  const [pendingMediaId, setPendingMediaId] = useState<number | null>(null);
 
-    fetchMediaFiles();
+  // Delete / rename dialogs
+  const [deleteTarget, setDeleteTarget] = useState<MediaFile | null>(null);
+  const [renameTarget, setRenameTarget] = useState<MediaFile | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const fetchMedia = useCallback(async () => {
+    setLoading(true);
+    setFetchError(null);
+    try {
+      const data = await mediaApi.getMediaFiles();
+      setMediaFiles(data);
+    } catch {
+      setFetchError("Couldn't load your media. The server may be unavailable.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchMedia();
+  }, [fetchMedia]);
+
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape" && selectedFile) setSelectedFile(null);
+    },
+    [selectedFile],
+  );
+  useEffect(() => {
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleKeyDown]);
 
   const filteredMedia = mediaFiles.filter((item) => {
     const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
@@ -59,344 +104,393 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
     return matchesSearch && matchesTab;
   });
 
-  const handleDelete = async (id: number) => {
-    if (confirm("Are you sure you want to delete this file?")) {
-      try {
-        const response = await fetch(`/api/media/${id}`, {
-          method: 'DELETE',
-        });
-        
-        if (response.ok) {
-          // Refresh media files list
-          const refreshResponse = await fetch('/api/media');
-          if (refreshResponse.ok) {
-            const data = await refreshResponse.json();
-            setMediaFiles(data);
-          }
-        } else {
-          alert("Failed to delete file");
-        }
-      } catch (error) {
-        console.error("Failed to delete file:", error);
-        alert("Failed to delete file");
+  // ---- device play/stop ----
+  const openPicker = (action: PickerAction, id: number) => {
+    setPickerAction(action);
+    setPendingMediaId(id);
+    setPickerOpen(true);
+  };
+
+  const onDeviceSelected = async (deviceId: string) => {
+    if (pendingMediaId == null) return;
+    const id = pendingMediaId;
+    try {
+      if (pickerAction === "play") {
+        await mediaApi.playMediaOnDevice(id, deviceId);
+        toast({ title: "Play command sent", description: `Now playing on ${deviceId}.`, variant: "success" });
+      } else {
+        await mediaApi.stopMediaOnDevice(id, deviceId);
+        toast({ title: "Stop command sent", description: `Stopped on ${deviceId}.`, variant: "success" });
       }
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Request failed.";
+      toast({ title: `Could not ${pickerAction}`, description: message, variant: "error" });
     }
   };
 
-  const handlePlay = async (id: number) => {
-    const deviceId = prompt("Enter device ID:");
-    if (deviceId) {
-      try {
-        const response = await fetch(`/api/media/${id}/play`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ device_id: deviceId }),
-        });
-        
-        if (response.ok) {
-          alert("Play command sent to device!");
-        } else {
-          alert("Failed to send play command to device");
-        }
-      } catch (error) {
-        console.error("Failed to play on device:", error);
-        alert("Failed to send play command to device");
-      }
+  // ---- delete ----
+  const doDelete = async () => {
+    if (!deleteTarget) return;
+    setBusy(true);
+    try {
+      await mediaApi.deleteMediaFile(deleteTarget.id);
+      if (selectedFile?.id === deleteTarget.id) setSelectedFile(null);
+      setMediaFiles((prev) => prev.filter((m) => m.id !== deleteTarget.id));
+      toast({ title: "File deleted", variant: "success" });
+      setDeleteTarget(null);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Delete failed.";
+      toast({ title: "Could not delete", description: message, variant: "error" });
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleStop = async (id: number) => {
-    const deviceId = prompt("Enter device ID:");
-    if (deviceId) {
-      try {
-        const response = await fetch(`/api/media/${id}/stop`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ device_id: deviceId }),
-        });
-        
-        if (response.ok) {
-          alert("Stop command sent to device!");
-        } else {
-          alert("Failed to send stop command to device");
-        }
-      } catch (error) {
-        console.error("Failed to stop on device:", error);
-        alert("Failed to send stop command to device");
-      }
+  // ---- rename ----
+  const openRename = (file: MediaFile) => {
+    setRenameTarget(file);
+    setRenameValue(file.title);
+  };
+  const doRename = async () => {
+    if (!renameTarget) return;
+    const title = renameValue.trim();
+    if (!title) return;
+    setBusy(true);
+    try {
+      const updated = await mediaApi.updateMediaFile(renameTarget.id, { title });
+      setMediaFiles((prev) => prev.map((m) => (m.id === updated.id ? { ...m, title } : m)));
+      setSelectedFile((prev) => (prev && prev.id === updated.id ? { ...prev, title } : prev));
+      toast({ title: "Renamed", variant: "success" });
+      setRenameTarget(null);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Rename failed.";
+      toast({ title: "Could not rename", description: message, variant: "error" });
+    } finally {
+      setBusy(false);
     }
+  };
+
+  const renderThumb = (item: MediaFile, fileUrl: string, fileType: string) => {
+    if (fileType === "image") {
+      return (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={fileUrl}
+          alt={item.title}
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+      );
+    }
+    const Icon = fileType === "video" ? FileVideo : FileIcon;
+    return (
+      <div className="flex h-full w-full items-center justify-center">
+        <Icon className="h-10 w-10 text-muted-foreground" />
+      </div>
+    );
   };
 
   return (
-    <div className="p-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Gallery</h1>
-        <p className="text-slate-400">Browse and manage your uploaded media files</p>
+    <div className="flex h-full flex-col p-6 lg:p-8">
+      <h1 className="mb-6 text-2xl font-semibold text-foreground">Gallery</h1>
+
+      {/* Toolbar */}
+      <div className="mb-4 flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search files..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="border-input bg-secondary pl-9"
+          />
+        </div>
+        <div className="flex items-center gap-3">
+          <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+            <TabsList className="h-8 bg-secondary">
+              <TabsTrigger value="all" className="h-6 px-3 text-xs">
+                All ({mediaFiles.length})
+              </TabsTrigger>
+              <TabsTrigger value="videos" className="h-6 px-3 text-xs">
+                Videos ({mediaFiles.filter((m) => getFileType(m.file) === "video").length})
+              </TabsTrigger>
+              <TabsTrigger value="images" className="h-6 px-3 text-xs">
+                Images ({mediaFiles.filter((m) => getFileType(m.file) === "image").length})
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="flex gap-1">
+            <Button variant={viewMode === "grid" ? "default" : "ghost"} size="icon" className="h-8 w-8" onClick={() => setViewMode("grid")}>
+              <Grid3x3 className="h-4 w-4" />
+            </Button>
+            <Button variant={viewMode === "list" ? "default" : "ghost"} size="icon" className="h-8 w-8" onClick={() => setViewMode("list")}>
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </div>
 
-      {/* Filters & Search */}
-      <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm mb-6">
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-            {/* Search */}
-            <div className="relative flex-1 w-full md:max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search files..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-slate-700/50 border-slate-600 text-white"
-              />
+      <div className="flex min-h-0 flex-1 gap-4">
+        <div className="min-w-0 flex-1">
+          {loading ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Card key={i} className="overflow-hidden border-border bg-card">
+                  <Skeleton className="aspect-video w-full" />
+                  <CardContent className="space-y-2 p-3">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-
-            {/* View Toggle */}
-            <div className="flex gap-2">
-              <Button
-                variant={viewMode === "grid" ? "default" : "outline"}
-                size="icon"
-                onClick={() => setViewMode("grid")}
-                className={
-                  viewMode === "grid"
-                    ? "bg-purple-600 hover:bg-purple-700"
-                    : "border-slate-600 text-slate-300 hover:bg-slate-700"
-                }
-              >
-                <Grid3x3 className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "list" ? "default" : "outline"}
-                size="icon"
-                onClick={() => setViewMode("list")}
-                className={
-                  viewMode === "list"
-                    ? "bg-purple-600 hover:bg-purple-700"
-                    : "border-slate-600 text-slate-300 hover:bg-slate-700"
-                }
-              >
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tabs */}
-      <Tabs value={selectedTab} onValueChange={setSelectedTab} className="mb-6">
-        <TabsList className="bg-slate-800 border border-slate-700">
-          <TabsTrigger value="all" className="data-[state=active]:bg-purple-600">
-            All ({mediaFiles.length})
-          </TabsTrigger>
-          <TabsTrigger value="videos" className="data-[state=active]:bg-purple-600">
-            Videos ({mediaFiles.filter((m) => getFileType(m.file) === "video").length})
-          </TabsTrigger>
-          <TabsTrigger value="images" className="data-[state=active]:bg-purple-600">
-            Images ({mediaFiles.filter((m) => getFileType(m.file) === "image").length})
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      {/* Media Grid/List */}
-      {loading ? (
-        <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm">
-          <CardContent className="py-16">
-            <div className="text-center text-slate-400">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-              <p className="text-lg mb-2">Loading media files...</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : filteredMedia.length === 0 ? (
-        <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm">
-          <CardContent className="py-16">
-            <div className="text-center text-slate-400">
-              <p className="text-lg mb-2">No media files found</p>
-              <p className="text-sm">Upload your first media file to get started</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : viewMode === "grid" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredMedia.map((item) => {
-            const fileType = getFileType(item.file);
-            const fileUrl = getMediaFileUrl(item.file);
-            const uploadDate = new Date(item.uploaded_at).toLocaleDateString();
-            
-            return (
-              <Card
-                key={item.id}
-                className="border-slate-700 bg-slate-800/50 backdrop-blur-sm hover:border-purple-500 transition-all group overflow-hidden"
-              >
-                <div className="relative aspect-video overflow-hidden">
-                  {fileType === "image" ? (
-                    <img
-                      src={fileUrl}
-                      alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-slate-700 flex items-center justify-center">
-                      <Play className="h-12 w-12 text-slate-400" />
-                    </div>
-                  )}
-                  {fileType === "video" && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                      <div className="h-12 w-12 rounded-full bg-white/90 flex items-center justify-center">
-                        <Play className="h-6 w-6 text-slate-900 ml-1" />
-                      </div>
-                    </div>
-                  )}
-                  <div className="absolute top-2 right-2">
-                    <Badge
-                      variant="secondary"
-                      className={
-                        fileType === "video"
-                          ? "bg-purple-600/90 text-white"
-                          : "bg-pink-600/90 text-white"
-                      }
-                    >
-                      {fileType}
-                    </Badge>
-                  </div>
-                </div>
-                <CardContent className="p-4">
-                  <h3 className="text-white font-medium truncate mb-1">{item.title}</h3>
-                  <p className="text-xs text-slate-400 mb-3">
-                    {uploadDate}
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="flex-1 border-slate-600 text-slate-300 hover:bg-slate-700"
-                      onClick={() => window.open(fileUrl, '_blank')}
-                    >
-                      <Eye className="h-3 w-3 mr-1" />
-                      View
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-slate-600 text-green-400 hover:bg-green-900/20"
-                      onClick={() => handlePlay(item.id)}
-                      title="Play on device"
-                    >
-                      <Play className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-slate-600 text-yellow-400 hover:bg-yellow-900/20"
-                      onClick={() => handleStop(item.id)}
-                      title="Stop on device"
-                    >
-                      <Square className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="border-slate-600 text-red-400 hover:bg-red-900/20"
-                      onClick={() => handleDelete(item.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      ) : (
-        <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm">
-          <CardContent className="p-0">
-            <div className="divide-y divide-slate-700">
+          ) : fetchError ? (
+            <Card className="border-destructive/40 bg-card">
+              <CardContent className="py-16 text-center">
+                <AlertCircle className="mx-auto mb-3 h-8 w-8 text-destructive" />
+                <p className="text-foreground">{fetchError}</p>
+                <Button variant="outline" className="mt-4" onClick={fetchMedia}>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Retry
+                </Button>
+              </CardContent>
+            </Card>
+          ) : filteredMedia.length === 0 ? (
+            <Card className="border-border bg-card">
+              <CardContent className="py-16 text-center">
+                <p className="text-muted-foreground">No media files found</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Upload your first media file to get started
+                </p>
+              </CardContent>
+            </Card>
+          ) : viewMode === "grid" ? (
+            <div
+              className={`grid gap-4 ${
+                selectedFile
+                  ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"
+                  : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              }`}
+            >
               {filteredMedia.map((item) => {
                 const fileType = getFileType(item.file);
                 const fileUrl = getMediaFileUrl(item.file);
                 const uploadDate = new Date(item.uploaded_at).toLocaleDateString();
-                
+                const isSelected = selectedFile?.id === item.id;
                 return (
-                  <div
+                  <Card
                     key={item.id}
-                    className="flex items-center gap-4 p-4 hover:bg-slate-700/30 transition-colors"
+                    className={`group cursor-pointer overflow-hidden border-border bg-card transition-colors ${
+                      isSelected ? "border-primary ring-2 ring-primary" : "hover:border-primary/40"
+                    }`}
+                    onClick={() => setSelectedFile((prev) => (prev?.id === item.id ? null : item))}
                   >
-                    {fileType === "image" ? (
-                      <img
-                        src={fileUrl}
-                        alt={item.title}
-                        className="h-16 w-24 object-cover rounded"
-                      />
-                    ) : (
-                      <div className="h-16 w-24 bg-slate-700 rounded flex items-center justify-center">
-                        <Play className="h-6 w-6 text-slate-400" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-white font-medium truncate">{item.title}</h3>
-                        <Badge
-                          variant="outline"
-                          className={
-                            fileType === "video"
-                              ? "bg-purple-500/20 text-purple-300 border-purple-500"
-                              : "bg-pink-500/20 text-pink-300 border-pink-500"
-                          }
-                        >
+                    <div className="relative aspect-video overflow-hidden bg-secondary">
+                      {renderThumb(item, fileUrl, fileType)}
+                      {fileType === "video" && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90">
+                            <Play className="ml-0.5 h-5 w-5 text-black" />
+                          </div>
+                        </div>
+                      )}
+                      <div className="absolute right-2 top-2">
+                        <Badge variant="secondary" className="bg-background/80 text-xs text-foreground backdrop-blur-sm">
                           {fileType}
                         </Badge>
                       </div>
-                      <p className="text-sm text-slate-400">
-                        Uploaded {uploadDate}
-                      </p>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-slate-600 text-slate-300 hover:bg-slate-700"
-                        onClick={() => window.open(fileUrl, '_blank')}
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-slate-600 text-green-400 hover:bg-green-900/20"
-                        onClick={() => handlePlay(item.id)}
-                        title="Play on device"
-                      >
-                        <Play className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-slate-600 text-yellow-400 hover:bg-yellow-900/20"
-                        onClick={() => handleStop(item.id)}
-                        title="Stop on device"
-                      >
-                        <Square className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-slate-600 text-red-400 hover:bg-red-900/20"
-                        onClick={() => handleDelete(item.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
+                    <CardContent className="p-3">
+                      <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{uploadDate}</p>
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <Card className="border-border bg-card">
+              <CardContent className="p-0">
+                <div className="divide-y divide-border">
+                  {filteredMedia.map((item) => {
+                    const fileType = getFileType(item.file);
+                    const fileUrl = getMediaFileUrl(item.file);
+                    const uploadDate = new Date(item.uploaded_at).toLocaleDateString();
+                    const isSelected = selectedFile?.id === item.id;
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex cursor-pointer items-center gap-4 p-3 transition-colors ${
+                          isSelected ? "bg-primary/5" : "hover:bg-secondary/50"
+                        }`}
+                        onClick={() => setSelectedFile((prev) => (prev?.id === item.id ? null : item))}
+                      >
+                        <div className="h-12 w-20 shrink-0 overflow-hidden rounded bg-secondary">
+                          {renderThumb(item, fileUrl, fileType)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+                            <Badge variant="outline" className="text-xs">{fileType}</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{uploadDate}</p>
+                        </div>
+                        <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-foreground" onClick={() => window.open(fileUrl, "_blank")}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-green-400 hover:text-green-300" onClick={() => openPicker("play", item.id)}>
+                            <Play className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(item)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Preview Panel */}
+        {selectedFile && (
+          <div className="flex w-[400px] shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-card transition-all duration-200">
+            <div className="flex items-center justify-between border-b border-border p-4">
+              <h3 className="truncate pr-2 text-sm font-medium text-foreground">{selectedFile.title}</h3>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground" onClick={() => setSelectedFile(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <ScrollArea className="flex-1">
+              <div className="space-y-4 p-4">
+                <div className="overflow-hidden rounded-md bg-secondary">
+                  {getFileType(selectedFile.file) === "image" ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={getMediaFileUrl(selectedFile.file)} alt={selectedFile.title} className="max-h-64 w-full object-contain" />
+                  ) : getFileType(selectedFile.file) === "video" ? (
+                    <video src={getMediaFileUrl(selectedFile.file)} controls className="max-h-64 w-full" />
+                  ) : (
+                    <div className="flex h-40 items-center justify-center">
+                      <FileIcon className="h-10 w-10 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Transcode status (videos) */}
+                {selectedFile.transcode_status && selectedFile.transcode_status !== "completed" && (
+                  <Badge
+                    variant="outline"
+                    className={
+                      selectedFile.transcode_status === "failed"
+                        ? "border-destructive/50 text-destructive"
+                        : "border-yellow-500/50 text-yellow-500"
+                    }
+                  >
+                    {selectedFile.transcode_status === "failed" ? "Transcode failed" : "Processing…"}
+                  </Badge>
+                )}
+
+                {/* Playback analytics */}
+                <div className="grid grid-cols-2 gap-3 rounded-md bg-secondary/50 p-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total plays</p>
+                    <p className="text-sm font-medium text-foreground">{selectedFile.total_play_count ?? 0}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total play time</p>
+                    <p className="text-sm font-medium text-foreground">{selectedFile.total_play_duration_display ?? "—"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Status</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {selectedFile.is_currently_playing ? "▶ Playing" : "Idle"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Uploaded</p>
+                    <p className="text-sm font-medium text-foreground">{new Date(selectedFile.uploaded_at).toLocaleDateString()}</p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="space-y-2">
+                  <Button className="w-full justify-start" variant="outline" onClick={() => openPicker("play", selectedFile.id)}>
+                    <Play className="mr-2 h-4 w-4" /> Play on Device
+                  </Button>
+                  <Button className="w-full justify-start" variant="outline" onClick={() => openPicker("stop", selectedFile.id)}>
+                    <Square className="mr-2 h-4 w-4" /> Stop Playback
+                  </Button>
+                  <Button className="w-full justify-start" variant="outline" onClick={() => openRename(selectedFile)}>
+                    <Pencil className="mr-2 h-4 w-4" /> Rename
+                  </Button>
+                  <Button className="w-full justify-start" variant="outline" onClick={() => window.open(getMediaFileUrl(selectedFile.file), "_blank")}>
+                    <ExternalLink className="mr-2 h-4 w-4" /> Open Original
+                  </Button>
+                  <Button className="w-full justify-start text-destructive hover:text-destructive" variant="outline" onClick={() => setDeleteTarget(selectedFile)}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                  </Button>
+                </div>
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+      </div>
+
+      {/* Device picker */}
+      <DevicePickerDialog
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onSelect={onDeviceSelected}
+        title={pickerAction === "play" ? "Play on device" : "Stop on device"}
+        onlineOnly={pickerAction === "play"}
+      />
+
+      {/* Delete confirm */}
+      <Dialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete file?</DialogTitle>
+            <DialogDescription>
+              &ldquo;{deleteTarget?.title}&rdquo; will be permanently removed, including its stored file. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={busy}>Cancel</Button>
+            <Button variant="outline" className="text-destructive hover:text-destructive" onClick={doDelete} disabled={busy}>
+              {busy ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename */}
+      <Dialog open={!!renameTarget} onOpenChange={(o) => !o && setRenameTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename file</DialogTitle>
+            <DialogDescription>Give this media a clearer title.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="rename-input">Title</Label>
+            <Input
+              id="rename-input"
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && doRename()}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameTarget(null)} disabled={busy}>Cancel</Button>
+            <Button onClick={doRename} disabled={busy || !renameValue.trim()}>
+              {busy ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
