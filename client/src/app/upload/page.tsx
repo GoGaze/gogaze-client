@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Upload, X, FileVideo, FileImage, Loader2, CloudUpload, RotateCw } from "lucide-react";
 import { formatFileSize } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 interface UploadFile {
   id: string;
@@ -21,6 +22,10 @@ interface UploadFile {
 }
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024;
+// Upload straight to the backend, NOT the same-origin Next route, to avoid
+// Vercel's ~4.5MB serverless function body limit (FUNCTION_PAYLOAD_TOO_LARGE).
+const UPLOAD_ENDPOINT =
+  (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api").replace(/\/+$/, "") + "/media/";
 let idCounter = 0;
 
 function stripExtension(name: string): string {
@@ -42,6 +47,7 @@ function validate(file: File): string | null {
 }
 
 export default function UploadPage() {
+  const { user } = useAuth();
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -104,8 +110,11 @@ export default function UploadPage() {
     processFiles(Array.from(e.dataTransfer.files));
   };
 
-  const uploadOne = (uploadFile: UploadFile): Promise<void> =>
-    new Promise((resolve) => {
+  const uploadOne = async (uploadFile: UploadFile): Promise<void> => {
+    // Auth via a fresh Firebase ID token — we're bypassing the Next proxy that
+    // normally injects auth from the HttpOnly cookie.
+    const token = user ? await user.getIdToken() : null;
+    return new Promise((resolve) => {
       const xhr = new XMLHttpRequest();
       const formData = new FormData();
       // Read the latest title (it may have been edited while queued).
@@ -150,10 +159,12 @@ export default function UploadPage() {
       xhr.addEventListener("abort", () => fail("Upload aborted."));
 
       xhr.timeout = 600000;
-      xhr.open("POST", "/api/media");
+      xhr.open("POST", UPLOAD_ENDPOINT);
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
       patch(uploadFile.id, { status: "uploading", progress: 0, errorMessage: undefined });
       xhr.send(formData);
     });
+  };
 
   const handleUpload = async () => {
     setUploading(true);
