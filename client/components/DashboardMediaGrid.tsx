@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { Play, FileVideo, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -95,11 +96,12 @@ export function DashboardMediaGrid({ mediaFiles }: { mediaFiles: MediaFile[] }) 
             >
               <div className="relative aspect-video overflow-hidden bg-secondary">
                 {fileType === "image" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={fileUrl}
                     alt={item.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 33vw, 25vw"
+                    className="object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">

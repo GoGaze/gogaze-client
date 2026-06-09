@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, ReactNode } from "react";
 
 interface SidebarContextValue {
   collapsed: boolean;
@@ -13,22 +13,26 @@ const SidebarContext = createContext<SidebarContextValue>({
 });
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
+  // Lazy-initialize from localStorage so the collapsed value is correct on the
+  // very first client render — no post-mount setState flip, which previously
+  // caused a visible expand→collapse width flash on every navigation.
+  const [collapsed, setCollapsed] = useState<boolean>(
+    () =>
+      typeof window !== "undefined" &&
+      localStorage.getItem("sidebar-collapsed") === "true"
+  );
 
-  useEffect(() => {
-    const stored = localStorage.getItem("sidebar-collapsed");
-    if (stored === "true") setCollapsed(true);
-  }, []);
-
-  const toggle = () => {
+  const toggle = useCallback(() => {
     setCollapsed((prev) => {
       localStorage.setItem("sidebar-collapsed", String(!prev));
       return !prev;
     });
-  };
+  }, []);
+
+  const value = useMemo(() => ({ collapsed, toggle }), [collapsed, toggle]);
 
   return (
-    <SidebarContext.Provider value={{ collapsed, toggle }}>
+    <SidebarContext.Provider value={value}>
       {children}
     </SidebarContext.Provider>
   );

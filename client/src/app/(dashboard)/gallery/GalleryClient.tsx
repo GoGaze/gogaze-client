@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +67,10 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
   const [renameValue, setRenameValue] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // The server component (gallery/page.tsx) already fetched fresh media and
+  // passed it as initialMediaFiles, so we do NOT refetch on mount (that was a
+  // redundant cross-network round-trip that also flashed skeletons over data we
+  // already had). fetchMedia is kept for the explicit error-state "Retry".
   const fetchMedia = useCallback(async () => {
     setLoading(true);
     setFetchError(null);
@@ -79,10 +84,6 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
     }
   }, []);
 
-  useEffect(() => {
-    fetchMedia();
-  }, [fetchMedia]);
-
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape" && selectedFile) setSelectedFile(null);
@@ -94,15 +95,41 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [handleKeyDown]);
 
-  const filteredMedia = mediaFiles.filter((item) => {
-    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const fileType = getFileType(item.file);
-    const matchesTab =
-      selectedTab === "all" ||
-      (selectedTab === "videos" && fileType === "video") ||
-      (selectedTab === "images" && fileType === "image");
-    return matchesSearch && matchesTab;
-  });
+  // Per-type counts in a single pass (was three separate full-list .filter()
+  // scans rendered inline in the TabsList on every render).
+  const counts = useMemo(() => {
+    let video = 0;
+    let image = 0;
+    for (const m of mediaFiles) {
+      const t = getFileType(m.file);
+      if (t === "video") video += 1;
+      else if (t === "image") image += 1;
+    }
+    return { all: mediaFiles.length, video, image };
+  }, [mediaFiles]);
+
+  // Memoized so search/unrelated re-renders don't re-run the full-list filter.
+  const filteredMedia = useMemo(() => {
+    const q = searchQuery.toLowerCase();
+    return mediaFiles.filter((item) => {
+      const matchesSearch = item.title.toLowerCase().includes(q);
+      const fileType = getFileType(item.file);
+      const matchesTab =
+        selectedTab === "all" ||
+        (selectedTab === "videos" && fileType === "video") ||
+        (selectedTab === "images" && fileType === "image");
+      return matchesSearch && matchesTab;
+    });
+  }, [mediaFiles, searchQuery, selectedTab]);
+
+  // Bound how many cards/rows (and thumbnail image requests) are rendered at
+  // once; "Load more" reveals the rest. Reset when the filter changes.
+  const PAGE_SIZE = 24;
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [searchQuery, selectedTab]);
+  const visibleMedia = filteredMedia.slice(0, visibleCount);
 
   // ---- device play/stop ----
   const openPicker = (action: PickerAction, id: number) => {
@@ -170,14 +197,24 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
     }
   };
 
-  const renderThumb = (item: MediaFile, fileUrl: string, fileType: string) => {
+  const renderThumb = (
+    item: MediaFile,
+    fileUrl: string,
+    fileType: string,
+    sizes: string,
+  ) => {
     if (fileType === "image") {
+      // next/image (fill) lets Next/Vercel serve a resized, lazy-loaded,
+      // modern-format thumbnail instead of shipping the full-resolution
+      // original. Parent containers are `relative` + sized (aspect-video grid
+      // card / fixed list cell), as `fill` requires.
       return (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <Image
           src={fileUrl}
           alt={item.title}
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          fill
+          sizes={sizes}
+          className="object-cover transition-transform duration-300 group-hover:scale-105"
         />
       );
     }
@@ -208,13 +245,13 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
           <Tabs value={selectedTab} onValueChange={setSelectedTab}>
             <TabsList className="h-8 bg-secondary">
               <TabsTrigger value="all" className="h-6 px-3 text-xs">
-                All ({mediaFiles.length})
+                All ({counts.all})
               </TabsTrigger>
               <TabsTrigger value="videos" className="h-6 px-3 text-xs">
-                Videos ({mediaFiles.filter((m) => getFileType(m.file) === "video").length})
+                Videos ({counts.video})
               </TabsTrigger>
               <TabsTrigger value="images" className="h-6 px-3 text-xs">
-                Images ({mediaFiles.filter((m) => getFileType(m.file) === "image").length})
+                Images ({counts.image})
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -271,7 +308,7 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
                   : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
               }`}
             >
-              {filteredMedia.map((item) => {
+              {visibleMedia.map((item) => {
                 const fileType = getFileType(item.file);
                 const fileUrl = getMediaFileUrl(item.file);
                 const uploadDate = new Date(item.uploaded_at).toLocaleDateString();
@@ -285,7 +322,12 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
                     onClick={() => setSelectedFile((prev) => (prev?.id === item.id ? null : item))}
                   >
                     <div className="relative aspect-video overflow-hidden bg-secondary">
-                      {renderThumb(item, fileUrl, fileType)}
+                      {renderThumb(
+                        item,
+                        fileUrl,
+                        fileType,
+                        "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw",
+                      )}
                       {fileType === "video" && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/90">
@@ -311,7 +353,7 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
             <Card className="border-border bg-card">
               <CardContent className="p-0">
                 <div className="divide-y divide-border">
-                  {filteredMedia.map((item) => {
+                  {visibleMedia.map((item) => {
                     const fileType = getFileType(item.file);
                     const fileUrl = getMediaFileUrl(item.file);
                     const uploadDate = new Date(item.uploaded_at).toLocaleDateString();
@@ -324,8 +366,8 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
                         }`}
                         onClick={() => setSelectedFile((prev) => (prev?.id === item.id ? null : item))}
                       >
-                        <div className="h-12 w-20 shrink-0 overflow-hidden rounded bg-secondary">
-                          {renderThumb(item, fileUrl, fileType)}
+                        <div className="relative h-12 w-20 shrink-0 overflow-hidden rounded bg-secondary">
+                          {renderThumb(item, fileUrl, fileType, "80px")}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
@@ -351,6 +393,17 @@ export function GalleryClient({ mediaFiles: initialMediaFiles }: GalleryClientPr
                 </div>
               </CardContent>
             </Card>
+          )}
+
+          {!loading && !fetchError && filteredMedia.length > visibleCount && (
+            <div className="mt-4 text-center">
+              <Button
+                variant="outline"
+                onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
+              >
+                Load more ({filteredMedia.length - visibleCount} remaining)
+              </Button>
+            </div>
           )}
         </div>
 
