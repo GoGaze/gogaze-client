@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -193,8 +192,7 @@ export default function UploadPage() {
   const isVideo = (file: File) => file.type.startsWith("video/");
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6 p-6 lg:p-8">
+    <div className="space-y-6 p-6 lg:p-8">
         <h1 className="text-2xl font-semibold text-foreground">Upload Media</h1>
 
         <Card className="border-border bg-card">
@@ -339,7 +337,6 @@ export default function UploadPage() {
           <p>Maximum file size: 500MB per file</p>
           <p>Supported formats: MP4, MOV, AVI, MKV, WebM, JPG, PNG, GIF, WebP, BMP</p>
         </div>
-      </div>
-    </DashboardLayout>
+    </div>
   );
 }

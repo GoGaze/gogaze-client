@@ -25,7 +25,7 @@ export default function RootLayout({
       <body className={`${inter.variable} font-sans`}>
         <AuthProvider>
           <ToastProvider>
-            <TooltipProvider delayDuration={0}>
+            <TooltipProvider delayDuration={200}>
               {children}
             </TooltipProvider>
           </ToastProvider>

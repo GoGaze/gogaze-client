@@ -1,4 +1,3 @@
-import { DashboardLayout } from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { getMediaFiles } from "@/lib/server-api";
@@ -18,8 +17,7 @@ export default async function DashboardPage() {
   ).length;
 
   return (
-    <DashboardLayout>
-      <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-6 lg:p-8 space-y-6">
         {/* Header with inline stats */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <h1 className="text-2xl font-semibold text-foreground">Dashboard</h1>
@@ -81,7 +79,6 @@ export default async function DashboardPage() {
         ) : (
           <DashboardMediaGrid mediaFiles={mediaFiles} />
         )}
-      </div>
-    </DashboardLayout>
+    </div>
   );
 }

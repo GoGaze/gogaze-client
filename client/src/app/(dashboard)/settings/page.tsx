@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { DashboardLayout } from "@/components/DashboardLayout";
 import {
   Card,
   CardContent,
@@ -128,8 +127,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="p-6 lg:p-8 max-w-2xl space-y-6">
+    <div className="p-6 lg:p-8 max-w-2xl space-y-6">
         <h1 className="text-2xl font-semibold text-foreground">Settings</h1>
 
         {/* Profile */}
@@ -302,7 +300,6 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
-    </DashboardLayout>
+    </div>
   );
 }

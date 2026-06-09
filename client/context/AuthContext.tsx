@@ -2,7 +2,7 @@
 
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import React, { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 import { onAuthStateChanged, signOut as firebaseSignOut, User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { syncSession, clearSession } from "@/lib/cookies";
@@ -66,8 +66,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  // Memoize so the provider value identity is stable across re-renders that
+  // don't change user/loading — avoids re-rendering every useAuth() consumer.
+  const value = useMemo(() => ({ user, loading }), [user, loading]);
+
   return (
-    <AuthContext.Provider value={{ user, loading }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
