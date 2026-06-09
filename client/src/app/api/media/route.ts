@@ -3,7 +3,7 @@ import { API_BASE_URL, authHeaders, relay, upstreamError } from '../config';
 
 // Route segment config for App Router
 export const runtime = 'nodejs';
-export const maxDuration = 600; // 10 minutes for large file uploads
+export const maxDuration = 300; // 5 min — Vercel Hobby plan max (was 600)
 
 export async function GET(request: NextRequest) {
   try {
